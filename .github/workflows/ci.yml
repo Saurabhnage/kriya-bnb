@@ -21,7 +21,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults: { run: { working-directory: web } }
     env:
-      NEXT_PUBLIC_CHAIN_ID: "11155111"
+      NEXT_PUBLIC_CHAIN_ID: "31337"
       KRIYA_LLM: "off"
     steps:
       - uses: actions/checkout@v4
@@ -33,16 +33,6 @@ jobs:
       - run: npx eslint src
       - run: npm test
       - run: npm run build
-
-  cre:
-    name: CRE workflow (types)
-    runs-on: ubuntu-latest
-    defaults: { run: { working-directory: cre/kriya-workflow } }
-    steps:
-      - uses: actions/checkout@v4
-      - uses: oven-sh/setup-bun@v2
-      - run: bun install --ignore-scripts
-      - run: bunx tsc --noEmit
 
   e2e:
     name: End-to-end (Anvil + API + wallet)
@@ -62,7 +52,6 @@ jobs:
           for i in $(seq 1 30); do cast block-number >/dev/null 2>&1 && break; sleep 1; done
           PRIVATE_KEY=$(cast wallet private-key "$MNEMONIC" 0) \
           AGENT_ADDRESS=$(cast wallet address $(cast wallet private-key "$MNEMONIC" 2)) \
-          CRE_FORWARDER=$(cast wallet address $(cast wallet private-key "$MNEMONIC" 1)) \
           forge script script/Deploy.s.sol --rpc-url http://127.0.0.1:8545 --broadcast
       - name: Start the KRIYA server against Anvil
         working-directory: web

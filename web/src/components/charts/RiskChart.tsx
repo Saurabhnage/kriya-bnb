@@ -40,8 +40,8 @@ export function RiskChart({ points, max }: { points: RiskPoint[]; max: number })
       <path d={segs.join(" ")} fill="none" stroke="#7cf7c4" strokeWidth="2.5" strokeLinejoin="round" />
       {points.map((p, i) =>
         p.kind === "execution" && p.portfolioRisk !== null ? (
-          <circle key={i} cx={x(i)} cy={y(p.portfolioRisk)} r="4" fill={p.source === "CRE" ? "#5aa8ff" : "#7cf7c4"}>
-            <title>{`${p.label}: risk ${p.portfolioRisk} (${p.source === "CRE" ? "Chainlink CRE" : "KRIYA agent"})`}</title>
+          <circle key={i} cx={x(i)} cy={y(p.portfolioRisk)} r="4" fill="#7cf7c4">
+            <title>{`${p.label}: risk ${p.portfolioRisk} (KRIYA agent)`}</title>
           </circle>
         ) : (
           <g key={i}>

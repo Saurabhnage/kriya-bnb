@@ -8,7 +8,7 @@ import { latestAssessment, type CournotAssessment } from "./cournot";
 import { remember } from "../memory";
 
 // KRIYA Market Risk Engine: CoinMarketCap + Atlas + Cournot → verified risk scores.
-// The result is written to the risk feed that the Chainlink CRE workflow (and the local keeper)
+// The result is written to the risk feed that the keeper
 // reads, verifies onchain, and acts on. Manual demo overrides ("change reality") sit on top.
 
 export const ENGINE_SOURCE = "KRIYA Market Risk Engine (CoinMarketCap + Atlas + Cournot)";

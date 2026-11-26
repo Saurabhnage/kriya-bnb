@@ -13,8 +13,8 @@ export const publicClient = createPublicClient({
 });
 
 /**
- * Event-log reads. Monad's public RPC caps eth_getLogs at 100 blocks (with 400 ms blocks), so on
- * Monad logs go to Envio HyperRPC when LOGS_RPC_URL is set, which serves large ranges in one call.
+ * Event-log reads. Optional LOGS_RPC_URL points log queries at an archive/indexing RPC that serves
+ * large block ranges in one call; otherwise the public RPC is paged.
  */
 const LOGS_RPC_URL = process.env.LOGS_RPC_URL?.trim();
 export const logsClient = LOGS_RPC_URL
@@ -23,11 +23,9 @@ export const logsClient = LOGS_RPC_URL
 /** Max block span per eth_getLogs call, and how far back to look when the RPC is range-capped. */
 export const LOG_RANGE = LOGS_RPC_URL
   ? { chunk: 500_000n, lookback: null }
-  : chain.id === 10143
-    ? { chunk: 99n, lookback: 400n }
-    : chain.id === 97
-      ? { chunk: 4_999n, lookback: null } // BSC public RPCs cap eth_getLogs at 5,000 blocks
-      : { chunk: 9_000n, lookback: null };
+  : chain.id === 31337
+    ? { chunk: 9_000n, lookback: null }
+    : { chunk: 4_999n, lookback: null }; // BSC public RPCs cap eth_getLogs at 5,000 blocks
 
 function wallet(envName: string) {
   const pk = process.env[envName]?.trim();
@@ -39,5 +37,5 @@ function wallet(envName: string) {
 /** Signer for the KRIYA agent role on KriyaExecutor (bounded: can only call executeAllocation). */
 export const agentWallet = () => wallet("AGENT_PRIVATE_KEY");
 
-/** Protocol owner. Used only by the local keeper fallback to post verified risk scores. */
+/** Protocol owner. Used by the keeper to write market-verified risk scores onchain. */
 export const adminWallet = () => wallet(process.env.ADMIN_PRIVATE_KEY ? "ADMIN_PRIVATE_KEY" : "AGENT_PRIVATE_KEY");

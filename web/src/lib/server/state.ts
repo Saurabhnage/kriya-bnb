@@ -1,5 +1,5 @@
 import "server-only";
-import { parseAbiItem, parseEventLogs, type Address, type Hex, type Log } from "viem";
+import { parseAbi, parseAbiItem, type Address, type Log } from "viem";
 import { LOG_RANGE, logsClient, publicClient } from "./chain";
 import { deployment } from "../config";
 import {
@@ -10,7 +10,7 @@ import {
   MockUSDCAbi,
 } from "../generated/abis";
 import type { MandateParams, StrategyView } from "../policy";
-import { getJson, readJournal, setJson, type JournalEntry } from "./store";
+import { readJournal, type JournalEntry } from "./store";
 import type { RiskPoint } from "./lastRun";
 
 export type Snapshot = {
@@ -112,7 +112,6 @@ export type ActivityItem = {
   detail?: string;
   txHash?: string;
   onchain: boolean;
-  source?: "CRE" | "AGENT";
 };
 
 const EVENTS = {
@@ -122,8 +121,9 @@ const EVENTS = {
   mandateStatus: parseAbiItem("event MandateStatusChanged(address indexed user, bool active)"),
   risk: parseAbiItem("event RiskUpdated(address indexed strategy, uint16 oldRisk, uint16 newRisk, address indexed updater)"),
   executed: parseAbiItem(
-    "event AllocationExecuted(address indexed user, uint256 indexed executionId, uint8 source, address[] strategies, uint16[] bps, uint16 reserveBps, uint16 portfolioRisk, uint256 totalValue, string rationale)",
+    "event AllocationExecuted(address indexed user, uint256 indexed executionId, address[] strategies, uint16[] bps, uint16 reserveBps, uint16 portfolioRisk, uint256 totalValue, string rationale)",
   ),
+  peg: parseAbiItem("event PegChecked(address indexed feed, int256 price, uint256 updatedAt, uint16 depegBps, bool deploymentsFrozen)"),
 };
 
 const CHUNK = LOG_RANGE.chunk;
@@ -142,97 +142,13 @@ async function logsInChunks<T>(fetcher: (from: bigint, to: bigint) => Promise<T[
   return out;
 }
 
-// ------------------------------------------------------------------ incremental log index (range-capped RPCs)
-// Monad's public RPC caps eth_getLogs at 100 blocks. Instead of rescanning from the deploy block on every
-// poll, keep every protocol log in the store with a cursor; each request only reads blocks past the cursor.
-
-type StoredLog = { address: Address; topics: Hex[]; data: Hex; blockNumber: string; blockHash: Hex; transactionHash: Hex; logIndex: number };
-type LogIndex = { cursor: string; logs: StoredLog[] };
-
-const INDEX_NAME = "logs-index-v1";
-const MAX_CHUNKS_PER_REQUEST = 200;
-const PARALLEL = 3;
-const SCAN_BUDGET_MS = 8_000;
-
-// Reads [from, to] in capped chunks. Stops early on an RPC error (public RPCs rate-limit bursts) or when the time
-// budget runs out, and reports how far it got, so a long backfill spreads over several polls instead of failing one.
-async function scanRange(from: bigint, to: bigint): Promise<{ logs: StoredLog[]; reached: bigint }> {
-  const ranges: [bigint, bigint][] = [];
-  for (let f = from; f <= to; f += CHUNK + 1n) ranges.push([f, f + CHUNK > to ? to : f + CHUNK]);
-  const out: StoredLog[] = [];
-  let reached = from - 1n;
-  const deadline = Date.now() + SCAN_BUDGET_MS;
-  for (let i = 0; i < ranges.length && Date.now() < deadline; i += PARALLEL) {
-    const slice = ranges.slice(i, i + PARALLEL);
-    let batch;
-    try {
-      batch = await Promise.all(
-        slice.map(([fromBlock, toBlock]) =>
-          logsClient.getLogs({ address: [deployment.vault, deployment.mandate, deployment.registry, deployment.executor], fromBlock, toBlock }),
-        ),
-      );
-    } catch (err) {
-      console.warn(`log index: scan stopped at block ${reached}:`, (err as Error).message?.slice(0, 160));
-      break;
-    }
-    for (const logs of batch)
-      for (const l of logs)
-        out.push({
-          address: l.address,
-          topics: l.topics as Hex[],
-          data: l.data,
-          blockNumber: l.blockNumber!.toString(),
-          blockHash: l.blockHash!,
-          transactionHash: l.transactionHash!,
-          logIndex: l.logIndex!,
-        });
-    reached = slice.at(-1)![1];
-  }
-  return { logs: out, reached };
-}
-
-async function indexedLogs(latest: bigint): Promise<Log[]> {
-  const deployed = BigInt(deployment.deployBlock);
-  const index = (await getJson<LogIndex>(INDEX_NAME)) ?? { cursor: (deployed - 1n).toString(), logs: [] };
-  const cursor = BigInt(index.cursor);
-  const max = cursor + BigInt(MAX_CHUNKS_PER_REQUEST) * (CHUNK + 1n);
-  const target = max < latest ? max : latest;
-  const fresh = target > cursor ? await scanRange(cursor + 1n, target) : { logs: [], reached: cursor };
-  // still backfilling: also read the recent window live so new events show up immediately
-  const live =
-    fresh.reached < latest && LOG_RANGE.lookback !== null
-      ? (await scanRange(latest - LOG_RANGE.lookback > fresh.reached ? latest - LOG_RANGE.lookback : fresh.reached + 1n, latest)).logs
-      : [];
-  if (fresh.reached > cursor) {
-    const seen = new Set(index.logs.map((l) => `${l.transactionHash}-${l.logIndex}`));
-    const merged = [...index.logs, ...fresh.logs.filter((l) => !seen.has(`${l.transactionHash}-${l.logIndex}`))];
-    await setJson(INDEX_NAME, { cursor: fresh.reached.toString(), logs: merged } satisfies LogIndex);
-    index.logs = merged;
-  }
-  const seen = new Set(index.logs.map((l) => `${l.transactionHash}-${l.logIndex}`));
-  return [...index.logs, ...live.filter((l) => !seen.has(`${l.transactionHash}-${l.logIndex}`))].map(
-    (l) =>
-      ({
-        ...l,
-        blockNumber: BigInt(l.blockNumber),
-        transactionIndex: 0,
-        removed: false,
-      }) as unknown as Log,
-  );
-}
-
 const fmtUsdc = (v: bigint) => (Number(v) / 1e6).toLocaleString("en-US", { maximumFractionDigits: 2 });
 
 export type ActivityResult = { items: ActivityItem[]; riskHistory: RiskPoint[]; journal: JournalEntry[] };
 
 export async function readActivity(user: Address, strategies: StrategyView[], latest: bigint): Promise<ActivityResult> {
   const name = (a: string) => strategies.find((s) => s.address.toLowerCase() === a.toLowerCase())?.name ?? a.slice(0, 8);
-  const all = CHUNK < 1_000n ? await indexedLogs(latest) : null;
   const get = async (address: Address, event: (typeof EVENTS)[keyof typeof EVENTS], args?: Record<string, unknown>) => {
-    if (all) {
-      const mine = all.filter((l) => l.address.toLowerCase() === address.toLowerCase());
-      return parseEventLogs({ abi: [event], logs: mine, args } as Parameters<typeof parseEventLogs>[0]);
-    }
     return logsInChunks(
       (fromBlock, toBlock) =>
         logsClient.getLogs({ address, event, args, fromBlock, toBlock } as Parameters<typeof logsClient.getLogs>[0]),
@@ -247,6 +163,9 @@ export async function readActivity(user: Address, strategies: StrategyView[], la
   const ms = await get(deployment.mandate, EVENTS.mandateStatus, { user });
   const risk = await get(deployment.registry, EVENTS.risk);
   const exec = await get(deployment.executor, EVENTS.executed, { user });
+  // Atlas peg readings the executor made onchain inside this user's executions
+  const execTxs = new Set((exec as Log[]).map((l) => l.transactionHash));
+  const peg = execTxs.size ? ((await get(deployment.executor, EVENTS.peg)) as Log[]).filter((l) => execTxs.has(l.transactionHash)) : [];
 
   type AnyLog = Log & { args: Record<string, unknown> };
   const items: {
@@ -254,7 +173,6 @@ export async function readActivity(user: Address, strategies: StrategyView[], la
     kind: string;
     title: string;
     detail?: string;
-    source?: "CRE" | "AGENT";
     point?: Omit<RiskPoint, "ts" | "txHash" | "order">;
   }[] = [];
   for (const l of dep as AnyLog[]) items.push({ log: l, kind: "deposit", title: `Deposited ${fmtUsdc(l.args.amount as bigint)} USDC` });
@@ -269,28 +187,37 @@ export async function readActivity(user: Address, strategies: StrategyView[], la
       log: l,
       kind: up ? "risk-up" : "risk-down",
       title: `Verified risk ${up ? "increase" : "change"}: ${name(l.args.strategy as string)} ${l.args.oldRisk} → ${l.args.newRisk}`,
-      detail: (l.args.updater as string).toLowerCase() === deployment.executor.toLowerCase() ? "Written by Chainlink CRE report" : "Written by protocol keeper",
-      source: (l.args.updater as string).toLowerCase() === deployment.executor.toLowerCase() ? "CRE" : "AGENT",
+      detail: "Written onchain by the KRIYA keeper from the Market Risk Engine (CoinMarketCap + Atlas + Cournot)",
       point: {
         portfolioRisk: null,
         kind: "risk-change",
         up: (l.args.newRisk as number) > (l.args.oldRisk as number),
         label: `${name(l.args.strategy as string).split(" - ")[0]} ${l.args.oldRisk} → ${l.args.newRisk}`,
-        source: (l.args.updater as string).toLowerCase() === deployment.executor.toLowerCase() ? "CRE" : "AGENT",
       },
     });
   }
   for (const l of exec as AnyLog[]) {
-    const a = l.args as { executionId: bigint; source: number; strategies: string[]; bps: number[]; reserveBps: number; portfolioRisk: number; rationale: string };
+    const a = l.args as { executionId: bigint; strategies: string[]; bps: number[]; reserveBps: number; portfolioRisk: number; rationale: string };
     const parts = a.strategies.map((s, i) => `${name(s).split(" - ")[0]} ${a.bps[i] / 100}%`);
     parts.push(`Reserve ${a.reserveBps / 100}%`);
     items.push({
       log: l,
       kind: "execute",
-      title: `Allocation #${a.executionId} executed via ${a.source === 1 ? "Chainlink CRE" : "KRIYA agent"} · risk ${a.portfolioRisk}`,
+      title: `Allocation #${a.executionId} executed by the KRIYA agent · risk ${a.portfolioRisk}`,
       detail: `${parts.join(" · ")}${a.rationale ? ` — ${a.rationale}` : ""}`,
-      source: a.source === 1 ? "CRE" : "AGENT",
-      point: { portfolioRisk: a.portfolioRisk, kind: "execution", label: `Allocation #${a.executionId}`, source: a.source === 1 ? "CRE" : "AGENT" },
+      point: { portfolioRisk: a.portfolioRisk, kind: "execution", label: `Allocation #${a.executionId}` },
+    });
+  }
+  const pegDecimals = peg.length
+    ? await publicClient.readContract({ address: (peg[0] as AnyLog).args.feed as Address, abi: parseAbi(["function decimals() view returns (uint8)"]), functionName: "decimals" })
+    : 8;
+  for (const l of peg as AnyLog[]) {
+    const a = l.args as { feed: string; price: bigint; depegBps: number; deploymentsFrozen: boolean };
+    items.push({
+      log: l,
+      kind: a.deploymentsFrozen ? "risk-up" : "verify",
+      title: `Atlas peg check onchain: $${(Number(a.price) / 10 ** pegDecimals).toFixed(4)} (${a.depegBps} bps off peg)${a.deploymentsFrozen ? " · new deployments frozen" : ""}`,
+      detail: `KriyaExecutor read Atlas feed ${a.feed} inside this execution`,
     });
   }
 
@@ -307,7 +234,6 @@ export async function readActivity(user: Address, strategies: StrategyView[], la
     detail: i.detail,
     txHash: i.log.transactionHash ?? undefined,
     onchain: true,
-    source: i.source,
   }));
   const riskHistory: RiskPoint[] = items
     .filter((i) => i.point)

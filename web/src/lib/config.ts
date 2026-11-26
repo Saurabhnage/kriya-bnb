@@ -1,17 +1,16 @@
 import { defineChain, type Address } from "viem";
-import { sepolia, foundry, monadTestnet, bscTestnet } from "viem/chains";
+import { foundry, bsc, bscTestnet } from "viem/chains";
 import { deployments } from "./generated/deployments";
 
-export const CHAIN_ID = Number(process.env.NEXT_PUBLIC_CHAIN_ID ?? 11155111);
+export const CHAIN_ID = Number(process.env.NEXT_PUBLIC_CHAIN_ID ?? 97);
 
 const local = defineChain({ ...foundry, rpcUrls: { default: { http: ["http://127.0.0.1:8545"] } } });
 const CHAINS = {
-  11155111: { chain: sepolia, rpc: "https://ethereum-sepolia-rpc.publicnode.com", explorer: "https://sepolia.etherscan.io", faucet: "https://faucets.chain.link/sepolia" },
   97: { chain: bscTestnet, rpc: "https://data-seed-prebsc-1-s1.bnbchain.org:8545", explorer: "https://testnet.bscscan.com", faucet: "https://www.bnbchain.org/en/testnet-faucet" },
-  10143: { chain: monadTestnet, rpc: "https://testnet-rpc.monad.xyz", explorer: "https://testnet.monadexplorer.com", faucet: "https://faucet.monad.xyz" },
+  56: { chain: bsc, rpc: "https://bsc-dataseed.bnbchain.org", explorer: "https://bscscan.com", faucet: null },
   31337: { chain: local, rpc: "http://127.0.0.1:8545", explorer: null, faucet: null },
 } as const;
-const cfg = CHAINS[CHAIN_ID as keyof typeof CHAINS] ?? CHAINS[11155111];
+const cfg = CHAINS[CHAIN_ID as keyof typeof CHAINS] ?? CHAINS[97];
 
 export const chain = cfg.chain;
 export const PUBLIC_RPC_URL = process.env.NEXT_PUBLIC_RPC_URL ?? cfg.rpc;
@@ -28,7 +27,8 @@ type Deployment = {
   mandate: Address;
   vault: Address;
   executor: Address;
-  forwarder: Address;
+  /** Atlas feed used by the executor's onchain peg guard (zero address = disabled). */
+  pegFeed: Address;
   agent: Address;
   strategyA: Address;
   strategyB: Address;
@@ -59,4 +59,4 @@ export const addressUrl = (a: string) => (EXPLORER ? `${EXPLORER}/address/${a}` 
 
 /** A live mandate judges can open read-only from the landing page, per chain. */
 export const DEMO_VIEW_ADDRESS: string | null =
-  ({ 11155111: "0x09855cE865D094F6c2F2B5A13F64FC6F82b3B4C7", 10143: "0x09855cE865D094F6c2F2B5A13F64FC6F82b3B4C7", 31337: "0x9965507D1a55bcC2695C58ba16FB37d819B0A4dc" } as Record<number, string>)[CHAIN_ID] ?? null;
+  ({ 31337: "0x9965507D1a55bcC2695C58ba16FB37d819B0A4dc" } as Record<number, string>)[CHAIN_ID] ?? null;

@@ -3,7 +3,7 @@ import { formatUnits, isAddress, parseAbi, type Address } from "viem";
 import { publicClient } from "../chain";
 
 // Atlas Oracle price feeds, read onchain on BNB Chain. Atlas single-feed contracts are
-// Chainlink AggregatorV3-compatible. Configure addresses per pair in .env:
+// AggregatorV3-compatible. Configure addresses per pair in .env:
 //   ATLAS_FEED_BNB_USD, ATLAS_FEED_USDT_USD, ATLAS_FEED_USDC_USD
 
 const FEED_ABI = parseAbi([

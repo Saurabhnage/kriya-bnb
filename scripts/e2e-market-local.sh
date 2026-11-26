@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Runs web/scripts/e2e-market.mjs end to end on a fresh local Anvil chain, with no API keys:
 # CoinMarketCap and Cournot are served by web/scripts/market-fixtures.mjs, and two Atlas-style
-# AggregatorV3 feeds (USDT/USD, BNB/USD) are deployed from contracts/src/mocks/MockAggregatorV3.sol.
+# AggregatorV3 feeds (USDT/USD, BNB/USD) are deployed from contracts/src/mocks/MockAggregatorV3.sol, and the
+# executor's onchain peg guard reads the USDT/USD one.
 # Needs: foundry (anvil, forge, cast) and node. Run from the repo root: ./scripts/e2e-market-local.sh
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -19,12 +20,14 @@ PK0=$(cast wallet private-key "$MNEMONIC" 0)
 cd "$ROOT/contracts"
 PRIVATE_KEY=$PK0 \
 AGENT_ADDRESS=$(cast wallet address "$(cast wallet private-key "$MNEMONIC" 2)") \
-CRE_FORWARDER=$(cast wallet address "$(cast wallet private-key "$MNEMONIC" 1)") \
   forge script script/Deploy.s.sol --rpc-url $RPC --broadcast >/dev/null
 feed() { forge create src/mocks/MockAggregatorV3.sol:MockAggregatorV3 --rpc-url $RPC --private-key "$PK0" --broadcast --constructor-args 8 "$1" "$2" | awk '/Deployed to/{print $3}'; }
 export ATLAS_FEED_USDT_USD=$(feed "USDT / USD" 100020000)
 export ATLAS_FEED_BNB_USD=$(feed "BNB / USD" 60000000000)
 echo "Atlas mock feeds: USDT $ATLAS_FEED_USDT_USD · BNB $ATLAS_FEED_BNB_USD"
+# switch on the executor's onchain Atlas peg guard (1% band, 1 day max feed age)
+EXECUTOR=$(node -p "require('./deployments/31337.json').executor")
+cast send "$EXECUTOR" "setPegGuard(address,uint16,uint32)" "$ATLAS_FEED_USDT_USD" 100 86400 --rpc-url $RPC --private-key "$PK0" >/dev/null
 
 cd "$ROOT/web"
 npm run sync >/dev/null

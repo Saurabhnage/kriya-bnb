@@ -5,7 +5,7 @@ import { fail, json, limited } from "@/lib/server/http";
 export const dynamic = "force-dynamic";
 
 // Pull live CoinMarketCap + Atlas data (and the latest Cournot assessment), rescore every strategy
-// and publish the result to the risk feed that Chainlink CRE / the keeper verify onchain.
+// and publish the result to the risk feed that the keeper verifies onchain.
 export async function POST() {
   const blocked = await limited("market-refresh", 20, 60);
   if (blocked) return blocked;

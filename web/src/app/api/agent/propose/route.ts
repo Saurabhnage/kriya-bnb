@@ -5,8 +5,8 @@ import { fail, json, parseUser, limited } from "@/lib/server/http";
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
 
-// Called by the Chainlink CRE workflow (and the dashboard) to obtain a validated proposal.
-// Body: { user, risks?: { [strategyAddress]: verifiedRisk }, source?: "cre", journal?: false }
+// Called by the dashboard ("Preview decision") to obtain a validated proposal without executing it.
+// Body: { user, risks?: { [strategyAddress]: verifiedRisk }, journal?: false }
 export async function POST(request: Request) {
   const blocked = await limited("propose", 20, 60);
   if (blocked) return blocked;
@@ -15,9 +15,7 @@ export async function POST(request: Request) {
     const user = parseUser(body.user);
     const input = await decisionInput(user, body.risks);
     const p = await propose(input);
-    // Requests from the CRE workflow open a CRE run, so the pipeline view can attribute it.
-    const ctx = body.source === "cre" ? { runId: `cre-${Date.now()}`, source: "CRE" as const } : {};
-    if (body.journal !== false && Date.now() - p.createdAt < 5_000) await journalProposal(user, p, input.strategies, ctx);
+    if (body.journal !== false && Date.now() - p.createdAt < 5_000) await journalProposal(user, p, input.strategies);
     return json({
       user,
       strategies: p.allocation.map((a) => a.strategy),

@@ -159,6 +159,18 @@ export function MarketPanel({ state, readOnly, onChanged }: { state: StateRespon
           ) : (
             <p className="text-xs text-muted">No Atlas feeds configured (ATLAS_FEED_BNB_USD / USDT_USD / USDC_USD).</p>
           )}
+          <h3 className="label mb-1 mt-3">Onchain peg guard (KriyaExecutor reads Atlas)</h3>
+          {data?.pegGuard ? (
+            <p className="text-xs">
+              <span className={data.pegGuard.frozen || data.pegGuard.stale ? "text-warn" : "text-accent"}>
+                {data.pegGuard.stale ? "Feed stale: execution blocked" : data.pegGuard.frozen ? "Depeg: new deployments frozen" : "On peg: deployments allowed"}
+              </span>{" "}
+              · <span className="font-mono">${data.pegGuard.price.toFixed(4)}</span> · {data.pegGuard.depegBps} bps off peg (limit {data.pegGuard.maxDepegBps}) ·{" "}
+              <Ext href={addressUrl(data.pegGuard.feed)}>{short(data.pegGuard.feed)}</Ext>
+            </p>
+          ) : (
+            <p className="text-xs text-muted">Not configured (deploy with ATLAS_PEG_FEED to enforce the stablecoin peg onchain).</p>
+          )}
           {data?.evidence.cmcCalls.length ? (
             <details className="mt-3 text-xs text-muted">
               <summary className="cursor-pointer">CoinMarketCap call log (proof of live usage)</summary>
@@ -236,12 +248,24 @@ export function MarketPanel({ state, readOnly, onChanged }: { state: StateRespon
               <p className="mt-1">
                 Claim: &ldquo;{data.cournot.claim}&rdquo; <span className="text-muted">({data.cournot.direction === "stress" ? "true = market stress" : "true = market relief"})</span>
               </p>
+              {(() => {
+                const lp = intel?.scores.find((s) => s.factors.some((f) => f.source === "Cournot"));
+                const f = lp?.factors.find((x) => x.source === "Cournot");
+                return (
+                  <p className="mt-1 rounded border border-line p-1.5">
+                    <span className="label">Added by KRIYA, not by Cournot:</span>{" "}
+                    {lp && f
+                      ? `this probability adds +${f.points} risk points to ${lp.name} (now ${lp.risk}); if that exceeds a mandate's max risk, the next loop verifies it onchain and exits the strategy.`
+                      : "below 20% stress probability, no event-risk premium is added."}
+                  </p>
+                );
+              })()}
               <p className="mt-1 text-muted">
-                Effect: adds an event-risk premium to the LP strategy (see its &ldquo;Event risk&rdquo; factor) · proof {data.cournot.proofId}
-                {data.cournot.requestId ? ` · request ${data.cournot.requestId}` : ""}
+                Proof {data.cournot.proofId}
+                {data.cournot.requestId ? ` · Cournot request ${data.cournot.requestId}` : ""} · markets {data.cournot.marketIds.join(", ")}
               </p>
               <details className="mt-2">
-                <summary className="cursor-pointer text-accent-2">Cournot assessment &amp; evidence (verbatim)</summary>
+                <summary className="cursor-pointer text-accent-2">Evidence returned by Cournot (verbatim, unedited)</summary>
                 <div className="mt-1 space-y-2">
                   <Verbatim label="result" value={data.cournot.result} />
                   <Verbatim label="basis" value={data.cournot.basis} />

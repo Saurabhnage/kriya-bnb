@@ -89,6 +89,15 @@ await step("user opens a $1,000 mandate and the loop allocates it", async () => 
   assert.equal(await pub.readContract({ address: dep.vault, abi: vaultAbi, functionName: "positionOf", args: [user.address, dep.strategyB] }), usd(400));
 });
 
+await step("Atlas peg guard: the executor read the USDT/USD feed onchain inside the allocation", async () => {
+  const { data } = await api("/api/market");
+  assert.ok(data.pegGuard, "peg guard is configured");
+  assert.equal(data.pegGuard.frozen, false);
+  assert.equal(data.pegGuard.depegBps, 2);
+  const st = (await api(`/api/state?user=${user.address}`)).data;
+  assert.ok(st.activity.some((a) => a.title.startsWith("Atlas peg check onchain: $1.0002 (2 bps off peg)")), JSON.stringify(st.activity.map((a) => a.title)));
+});
+
 await step("BNB sells off: CoinMarketCap volatility pushes the LP strategy past the mandate", async () => {
   setMode("volatile");
   const { data } = await api("/api/market/refresh", {});
@@ -136,6 +145,19 @@ await step("scenario override sticks over live data until reset", async () => {
   assert.equal(data.feed.risks[dep.strategyC.toLowerCase()], 55);
   await api("/api/risk-feed", { reset: true });
   assert.notEqual((await api("/api/risk-feed")).data.strategies.find((s) => s.address.toLowerCase() === dep.strategyC.toLowerCase()).risk, 55);
+});
+
+await step("Atlas depeg freezes new deployments onchain, recovery unfreezes them", async () => {
+  const feed = process.env.ATLAS_FEED_USDT_USD;
+  assert.ok(feed, "ATLAS_FEED_USDT_USD");
+  const feedAbi = parseAbi(["function setAnswer(int256)"]);
+  await send(feed, feedAbi, "setAnswer", [97_000_000n]); // USDT at $0.97
+  let { data } = await api("/api/market");
+  assert.equal(data.pegGuard.frozen, true);
+  assert.equal(data.pegGuard.depegBps, 300);
+  await send(feed, feedAbi, "setAnswer", [100_020_000n]);
+  ({ data } = await api("/api/market"));
+  assert.equal(data.pegGuard.frozen, false);
 });
 
 setMode("calm");

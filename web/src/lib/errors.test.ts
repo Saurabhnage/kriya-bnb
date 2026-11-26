@@ -10,7 +10,7 @@ test("pending MetaMask request", () =>
 
 test("insufficient gas funds links a faucet", () => {
   const f = friendlyError(new Error("insufficient funds for gas * price + value"));
-  assert.match(f.message, /Sepolia ETH/);
+  assert.match(f.message, /BNB Chain testnet tBNB/);
   assert.ok(f.link?.href.includes("faucet"));
 });
 
@@ -18,9 +18,9 @@ test("rate limit message passes through", () =>
   assert.match(friendlyError(new Error('Rate limited: "keeper-run" is capped at 6 per 60s')).message, /^Rate limited/));
 
 test("gas error names the active chain's token and faucet", () => {
-  const f = friendlyError(new Error("insufficient funds for gas"), { symbol: "MON", network: "Monad Testnet", faucet: "https://faucet.monad.xyz" });
-  assert.match(f.message, /Monad Testnet MON/);
-  assert.equal(f.link?.href, "https://faucet.monad.xyz");
+  const f = friendlyError(new Error("insufficient funds for gas"), { symbol: "BNB", network: "BNB Chain", faucet: null });
+  assert.match(f.message, /BNB Chain BNB/);
+  assert.equal(f.link, undefined);
 });
 
 test("custom contract error is kept", () =>

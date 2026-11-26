@@ -25,7 +25,7 @@ export function DecisionCard({ decision, state, previewing }: { decision: Decisi
       className="min-h-0 flex-1"
       right={
         <span className="font-mono text-xs text-muted">
-          {decision.engine === "llm" ? `Claude · ${decision.model}` : "Deterministic optimizer"} · {decision.source === "CRE" ? "via Chainlink CRE" : "via KRIYA"} · {relTime(decision.ts, now)}
+          {decision.engine === "llm" ? `Claude · ${decision.model}` : "Deterministic optimizer"} · {relTime(decision.ts, now)}
         </span>
       }
     >

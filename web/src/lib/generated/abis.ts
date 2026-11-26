@@ -5,11 +5,6 @@ export const KriyaExecutorAbi = [
     "type": "constructor",
     "inputs": [
       {
-        "name": "forwarder",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
         "name": "_mandate",
         "type": "address",
         "internalType": "contract KriyaMandate"
@@ -41,32 +36,6 @@ export const KriyaExecutorAbi = [
         "name": "",
         "type": "uint16",
         "internalType": "uint16"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "REPORT_ALLOCATION",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint8",
-        "internalType": "uint8"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "REPORT_RISK_UPDATE",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint8",
-        "internalType": "uint8"
       }
     ],
     "stateMutability": "view"
@@ -134,58 +103,6 @@ export const KriyaExecutorAbi = [
         "name": "",
         "type": "uint256",
         "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "getExpectedAuthor",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "getExpectedWorkflowId",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "getExpectedWorkflowName",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "bytes10",
-        "internalType": "bytes10"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "getForwarderAddress",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "address",
-        "internalType": "address"
       }
     ],
     "stateMutability": "view"
@@ -261,21 +178,29 @@ export const KriyaExecutorAbi = [
   },
   {
     "type": "function",
-    "name": "onReport",
-    "inputs": [
+    "name": "maxDepegBps",
+    "inputs": [],
+    "outputs": [
       {
-        "name": "metadata",
-        "type": "bytes",
-        "internalType": "bytes"
-      },
-      {
-        "name": "report",
-        "type": "bytes",
-        "internalType": "bytes"
+        "name": "",
+        "type": "uint16",
+        "internalType": "uint16"
       }
     ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "maxFeedAge",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint32",
+        "internalType": "uint32"
+      }
+    ],
+    "stateMutability": "view"
   },
   {
     "type": "function",
@@ -297,6 +222,62 @@ export const KriyaExecutorAbi = [
     "outputs": [
       {
         "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "pegFeed",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "contract IAtlasFeed"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "pegStatus",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "enabled",
+        "type": "bool",
+        "internalType": "bool"
+      },
+      {
+        "name": "price",
+        "type": "int256",
+        "internalType": "int256"
+      },
+      {
+        "name": "decimals",
+        "type": "uint8",
+        "internalType": "uint8"
+      },
+      {
+        "name": "updatedAt",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "depegBps",
+        "type": "uint16",
+        "internalType": "uint16"
+      },
+      {
+        "name": "stale",
+        "type": "bool",
+        "internalType": "bool"
+      },
+      {
+        "name": "frozen",
         "type": "bool",
         "internalType": "bool"
       }
@@ -338,58 +319,6 @@ export const KriyaExecutorAbi = [
   },
   {
     "type": "function",
-    "name": "setExpectedAuthor",
-    "inputs": [
-      {
-        "name": "_author",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "setExpectedWorkflowId",
-    "inputs": [
-      {
-        "name": "_id",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "setExpectedWorkflowName",
-    "inputs": [
-      {
-        "name": "_name",
-        "type": "string",
-        "internalType": "string"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "setForwarderAddress",
-    "inputs": [
-      {
-        "name": "_forwarder",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
     "name": "setPaused",
     "inputs": [
       {
@@ -403,22 +332,26 @@ export const KriyaExecutorAbi = [
   },
   {
     "type": "function",
-    "name": "supportsInterface",
+    "name": "setPegGuard",
     "inputs": [
       {
-        "name": "interfaceId",
-        "type": "bytes4",
-        "internalType": "bytes4"
-      }
-    ],
-    "outputs": [
+        "name": "feed",
+        "type": "address",
+        "internalType": "address"
+      },
       {
-        "name": "",
-        "type": "bool",
-        "internalType": "bool"
+        "name": "_maxDepegBps",
+        "type": "uint16",
+        "internalType": "uint16"
+      },
+      {
+        "name": "_maxFeedAge",
+        "type": "uint32",
+        "internalType": "uint32"
       }
     ],
-    "stateMutability": "view"
+    "outputs": [],
+    "stateMutability": "nonpayable"
   },
   {
     "type": "function",
@@ -510,12 +443,6 @@ export const KriyaExecutorAbi = [
         "internalType": "uint256"
       },
       {
-        "name": "source",
-        "type": "uint8",
-        "indexed": false,
-        "internalType": "enum KriyaExecutor.Source"
-      },
-      {
         "name": "strategies",
         "type": "address[]",
         "indexed": false,
@@ -556,82 +483,6 @@ export const KriyaExecutorAbi = [
   },
   {
     "type": "event",
-    "name": "ExpectedAuthorUpdated",
-    "inputs": [
-      {
-        "name": "previousAuthor",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      },
-      {
-        "name": "newAuthor",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "ExpectedWorkflowIdUpdated",
-    "inputs": [
-      {
-        "name": "previousId",
-        "type": "bytes32",
-        "indexed": true,
-        "internalType": "bytes32"
-      },
-      {
-        "name": "newId",
-        "type": "bytes32",
-        "indexed": true,
-        "internalType": "bytes32"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "ExpectedWorkflowNameUpdated",
-    "inputs": [
-      {
-        "name": "previousName",
-        "type": "bytes10",
-        "indexed": true,
-        "internalType": "bytes10"
-      },
-      {
-        "name": "newName",
-        "type": "bytes10",
-        "indexed": true,
-        "internalType": "bytes10"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "ForwarderAddressUpdated",
-    "inputs": [
-      {
-        "name": "previousForwarder",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      },
-      {
-        "name": "newForwarder",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
     "name": "OwnershipTransferred",
     "inputs": [
       {
@@ -664,32 +515,62 @@ export const KriyaExecutorAbi = [
   },
   {
     "type": "event",
-    "name": "RiskReportApplied",
+    "name": "PegChecked",
     "inputs": [
       {
-        "name": "strategies",
-        "type": "address[]",
-        "indexed": false,
-        "internalType": "address[]"
+        "name": "feed",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
       },
       {
-        "name": "risks",
-        "type": "uint16[]",
+        "name": "price",
+        "type": "int256",
         "indexed": false,
-        "internalType": "uint16[]"
+        "internalType": "int256"
+      },
+      {
+        "name": "updatedAt",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "depegBps",
+        "type": "uint16",
+        "indexed": false,
+        "internalType": "uint16"
+      },
+      {
+        "name": "deploymentsFrozen",
+        "type": "bool",
+        "indexed": false,
+        "internalType": "bool"
       }
     ],
     "anonymous": false
   },
   {
     "type": "event",
-    "name": "SecurityWarning",
+    "name": "PegGuardSet",
     "inputs": [
       {
-        "name": "message",
-        "type": "string",
+        "name": "feed",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "maxDepegBps",
+        "type": "uint16",
         "indexed": false,
-        "internalType": "string"
+        "internalType": "uint16"
+      },
+      {
+        "name": "maxFeedAge",
+        "type": "uint32",
+        "indexed": false,
+        "internalType": "uint32"
       }
     ],
     "anonymous": false
@@ -713,6 +594,27 @@ export const KriyaExecutorAbi = [
         "name": "user",
         "type": "address",
         "internalType": "address"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "DeploymentFrozenByPeg",
+    "inputs": [
+      {
+        "name": "strategy",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "depegBps",
+        "type": "uint16",
+        "internalType": "uint16"
+      },
+      {
+        "name": "maxDepegBps",
+        "type": "uint16",
+        "internalType": "uint16"
       }
     ]
   },
@@ -766,72 +668,8 @@ export const KriyaExecutorAbi = [
   },
   {
     "type": "error",
-    "name": "InvalidAuthor",
-    "inputs": [
-      {
-        "name": "received",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "expected",
-        "type": "address",
-        "internalType": "address"
-      }
-    ]
-  },
-  {
-    "type": "error",
-    "name": "InvalidForwarderAddress",
+    "name": "InvalidPegGuard",
     "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "InvalidSender",
-    "inputs": [
-      {
-        "name": "sender",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "expected",
-        "type": "address",
-        "internalType": "address"
-      }
-    ]
-  },
-  {
-    "type": "error",
-    "name": "InvalidWorkflowId",
-    "inputs": [
-      {
-        "name": "received",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      },
-      {
-        "name": "expected",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      }
-    ]
-  },
-  {
-    "type": "error",
-    "name": "InvalidWorkflowName",
-    "inputs": [
-      {
-        "name": "received",
-        "type": "bytes10",
-        "internalType": "bytes10"
-      },
-      {
-        "name": "expected",
-        "type": "bytes10",
-        "internalType": "bytes10"
-      }
-    ]
   },
   {
     "type": "error",
@@ -926,6 +764,22 @@ export const KriyaExecutorAbi = [
   },
   {
     "type": "error",
+    "name": "StalePegFeed",
+    "inputs": [
+      {
+        "name": "updatedAt",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "maxAge",
+        "type": "uint32",
+        "internalType": "uint32"
+      }
+    ]
+  },
+  {
+    "type": "error",
     "name": "StrategyNotAllowed",
     "inputs": [
       {
@@ -955,22 +809,6 @@ export const KriyaExecutorAbi = [
         "internalType": "uint16"
       }
     ]
-  },
-  {
-    "type": "error",
-    "name": "UnknownReportType",
-    "inputs": [
-      {
-        "name": "kind",
-        "type": "uint8",
-        "internalType": "uint8"
-      }
-    ]
-  },
-  {
-    "type": "error",
-    "name": "WorkflowNameRequiresAuthorValidation",
-    "inputs": []
   }
 ] as const;
 

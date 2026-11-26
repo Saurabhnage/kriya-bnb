@@ -2,7 +2,7 @@
 pragma solidity ^0.8.26;
 
 /// @title MockAggregatorV3 - local stand-in for an Atlas Oracle single-feed contract
-/// @notice Atlas feeds are Chainlink AggregatorV3-compatible; this mock exposes the same read
+/// @notice Atlas feeds are AggregatorV3-compatible; this mock exposes the same read
 ///         interface so the market risk engine can be tested end to end on Anvil.
 contract MockAggregatorV3 {
     uint8 public immutable decimals;

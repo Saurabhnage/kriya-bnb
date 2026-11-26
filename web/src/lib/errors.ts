@@ -3,7 +3,7 @@
 export type Friendly = { message: string; link?: { label: string; href: string } };
 
 export type GasInfo = { symbol: string; network: string; faucet: string | null };
-const DEFAULT_GAS: GasInfo = { symbol: "ETH", network: "Sepolia", faucet: "https://faucets.chain.link/sepolia" };
+const DEFAULT_GAS: GasInfo = { symbol: "tBNB", network: "BNB Chain testnet", faucet: "https://www.bnbchain.org/en/testnet-faucet" };
 
 export function friendlyError(err: unknown, gas: GasInfo = DEFAULT_GAS): Friendly {
   if (typeof err === "string") return { message: err };

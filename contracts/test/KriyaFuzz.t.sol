@@ -29,10 +29,9 @@ contract KriyaFuzzTest is Test {
         registry = new KriyaStrategyRegistry();
         mandate = new KriyaMandate();
         vault = new KriyaVault(IERC20(address(usdc)), mandate, registry);
-        executor = new KriyaExecutor(makeAddr("forwarder"), mandate, vault, registry, agent);
+        executor = new KriyaExecutor(mandate, vault, registry, agent);
         mandate.setVault(address(vault));
         vault.setExecutor(address(executor));
-        registry.setUpdater(address(executor), true);
 
         uint16[3] memory risks = [uint16(21), 34, 15];
         for (uint256 i = 0; i < 3; i++) {

@@ -9,7 +9,8 @@ import {KriyaStrategyRegistry} from "../src/KriyaStrategyRegistry.sol";
 import {KriyaMandate} from "../src/KriyaMandate.sol";
 import {KriyaVault} from "../src/KriyaVault.sol";
 import {KriyaExecutor} from "../src/KriyaExecutor.sol";
-import {ReceiverTemplate} from "../src/cre/ReceiverTemplate.sol";
+import {MockAggregatorV3} from "../src/mocks/MockAggregatorV3.sol";
+import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 
 contract KriyaTest is Test {
     MockUSDC usdc;
@@ -21,7 +22,6 @@ contract KriyaTest is Test {
     address stratB;
     address stratC;
 
-    address forwarder = makeAddr("forwarder");
     address agent = makeAddr("agent");
     address user = makeAddr("user");
 
@@ -32,10 +32,9 @@ contract KriyaTest is Test {
         registry = new KriyaStrategyRegistry();
         mandate = new KriyaMandate();
         vault = new KriyaVault(IERC20(address(usdc)), mandate, registry);
-        executor = new KriyaExecutor(forwarder, mandate, vault, registry, agent);
+        executor = new KriyaExecutor(mandate, vault, registry, agent);
         mandate.setVault(address(vault));
         vault.setExecutor(address(executor));
-        registry.setUpdater(address(executor), true);
 
         stratA = address(new MockStrategy(IERC20(address(usdc)), address(vault), "Strategy A"));
         stratB = address(new MockStrategy(IERC20(address(usdc)), address(vault), "Strategy B"));
@@ -87,9 +86,17 @@ contract KriyaTest is Test {
         executor.executeAllocation(user, s, w, "initial");
     }
 
-    function _report(uint8 kind, bytes memory payload) internal {
-        vm.prank(forwarder);
-        executor.onReport("", abi.encode(kind, payload));
+    function _setRisk(address strategy, uint16 risk) internal {
+        address[] memory s = new address[](1);
+        uint16[] memory r = new uint16[](1);
+        (s[0], r[0]) = (strategy, risk);
+        registry.setRisks(s, r); // test contract is the protocol owner (the keeper's admin key)
+    }
+
+    /// @dev Atlas-style USDT/USD feed, 8 decimals, wired into the executor's peg guard (1% band, 1 day).
+    function _pegFeed(int256 answer) internal returns (MockAggregatorV3 feed) {
+        feed = new MockAggregatorV3(8, "USDT / USD", answer);
+        executor.setPegGuard(address(feed), 100, 1 days);
     }
 
     // ------------------------------------------------------------------ mandate + deposit
@@ -203,22 +210,20 @@ contract KriyaTest is Test {
         executor.executeAllocation(user, s, w, "rebalance");
     }
 
-    // ------------------------------------------------------------------ CRE path
+    // ------------------------------------------------------------------ market-driven rebalance
 
-    function test_CreRiskReportThenRebalanceRestoresMandate() public {
+    function test_RiskUpdateThenRebalanceRestoresMandate() public {
         _initialAllocation();
 
-        // CRE verifies the external risk change and writes it onchain
-        address[] memory s = new address[](1);
-        uint16[] memory r = new uint16[](1);
-        (s[0], r[0]) = (stratB, 48);
-        _report(1, abi.encode(s, r));
+        // the keeper writes the market-verified risk change onchain
+        _setRisk(stratB, 48);
         assertEq(registry.riskOf(stratB), 48);
         assertTrue(executor.mandateHealth(user).violated, "mandate should be at risk");
 
-        // CRE delivers the verified rebalance
+        // the agent delivers the rebalance, checked against the mandate onchain
         (address[] memory a, uint16[] memory w) = _alloc(stratA, 4000, stratC, 3500);
-        _report(2, abi.encode(user, a, w, "exit B: risk 34 -> 48 exceeds mandate max 40"));
+        vm.prank(agent);
+        executor.executeAllocation(user, a, w, "exit B: risk 34 -> 48 exceeds mandate max 40");
 
         assertEq(vault.positionOf(user, stratB), 0);
         assertEq(vault.positionOf(user, stratA), 400e6);
@@ -232,17 +237,78 @@ contract KriyaTest is Test {
         assertEq(executor.executionCount(), 2);
     }
 
-    function test_CreAllocationIsStillMandateChecked() public {
-        (address[] memory a, uint16[] memory w) = _alloc(stratA, 3500, stratB, 5000);
-        vm.prank(forwarder);
-        vm.expectRevert(abi.encodeWithSelector(KriyaExecutor.ExposureExceeded.selector, stratB, 5000, 4000));
-        executor.onReport("", abi.encode(uint8(2), abi.encode(user, a, w, "bad")));
+    function test_RevertWhen_StrangerExecutes() public {
+        (address[] memory a, uint16[] memory w) = _alloc(stratA, 3500, stratB, 4000);
+        vm.expectRevert(KriyaExecutor.NotAgent.selector);
+        executor.executeAllocation(user, a, w, "spoof");
     }
 
-    function test_RevertWhen_ReportNotFromForwarder() public {
-        (address[] memory a, uint16[] memory w) = _alloc(stratA, 3500, stratB, 4000);
-        vm.expectRevert(abi.encodeWithSelector(ReceiverTemplate.InvalidSender.selector, address(this), forwarder));
-        executor.onReport("", abi.encode(uint8(2), abi.encode(user, a, w, "spoof")));
+    // ------------------------------------------------------------------ Atlas peg guard
+
+    function test_PegGuardDisabledByDefault() public {
+        (bool enabled,,,,,,) = executor.pegStatus();
+        assertFalse(enabled);
+        _initialAllocation();
+        assertEq(vault.positionOf(user, stratB), 400e6);
+    }
+
+    function test_PegGuardOnPegAllowsDeploymentAndEmitsEvidence() public {
+        MockAggregatorV3 feed = _pegFeed(1.0004e8); // 4 bps off peg
+        (address[] memory s, uint16[] memory w) = _alloc(stratA, 3500, stratB, 4000);
+        vm.expectEmit(true, false, false, true, address(executor));
+        emit KriyaExecutor.PegChecked(address(feed), 1.0004e8, block.timestamp, 4, false);
+        vm.prank(agent);
+        executor.executeAllocation(user, s, w, "initial");
+        assertEq(vault.positionOf(user, stratB), 400e6);
+    }
+
+    function test_PegGuardDepegFreezesNewDeployments() public {
+        _pegFeed(0.97e8); // 300 bps off peg, band is 100
+        (,,,, uint16 depegBps,, bool frozen) = executor.pegStatus();
+        assertEq(depegBps, 300);
+        assertTrue(frozen);
+        (address[] memory s, uint16[] memory w) = _alloc(stratA, 3500, stratB, 4000);
+        vm.prank(agent);
+        vm.expectRevert(abi.encodeWithSelector(KriyaExecutor.DeploymentFrozenByPeg.selector, stratA, 300, 100));
+        executor.executeAllocation(user, s, w, "deploy during depeg");
+        assertEq(vault.idleOf(user), CAPITAL, "funds stay in the vault");
+    }
+
+    function test_PegGuardDepegStillAllowsExits() public {
+        _initialAllocation();
+        _pegFeed(1.025e8); // 250 bps above peg
+        (address[] memory s, uint16[] memory w) = _alloc(stratA, 2000, stratC, 0);
+        vm.prank(agent);
+        executor.executeAllocation(user, s, w, "de-risk during depeg");
+        assertEq(vault.positionOf(user, stratB), 0);
+        assertEq(vault.positionOf(user, stratA), 200e6);
+        assertEq(vault.idleOf(user), 800e6);
+    }
+
+    function test_PegGuardStaleFeedBlocksExecution() public {
+        MockAggregatorV3 feed = _pegFeed(1e8);
+        uint256 updated = feed.updatedAt();
+        vm.warp(block.timestamp + 1 days + 1);
+        (address[] memory s, uint16[] memory w) = _alloc(stratA, 3500, stratB, 4000);
+        vm.prank(agent);
+        vm.expectRevert(abi.encodeWithSelector(KriyaExecutor.StalePegFeed.selector, updated, 1 days));
+        executor.executeAllocation(user, s, w, "stale");
+        feed.setAnswer(1e8); // a fresh round unblocks it
+        vm.prank(agent);
+        executor.executeAllocation(user, s, w, "fresh");
+    }
+
+    function test_RevertWhen_StrangerSetsPegGuard() public {
+        vm.prank(agent);
+        vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, agent));
+        executor.setPegGuard(address(1), 100, 1 days);
+    }
+
+    function test_RevertWhen_PegGuardBandInvalid() public {
+        vm.expectRevert(KriyaExecutor.InvalidPegGuard.selector);
+        executor.setPegGuard(address(1), 0, 1 days);
+        vm.expectRevert(KriyaExecutor.InvalidPegGuard.selector);
+        executor.setPegGuard(address(1), 2_001, 1 days);
     }
 
     function test_RevertWhen_RiskUpdateFromStranger() public {

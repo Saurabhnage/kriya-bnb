@@ -1,360 +1,237 @@
-# KRIYA — Autonomous Capital Protocol
+# KRIYA: mandate-bound AI capital on BNB Chain
 
 > **Stop programming transactions. Start programming financial objectives.**
 
-KRIYA lets a user program a **financial mandate** (objective + hard constraints) instead of individual transactions. An AI agent (Claude) researches strategies and proposes allocations, **Chainlink CRE** verifies external reality and orchestrates the decision-to-execution flow, and **smart contracts enforce** the mandate: any allocation outside it reverts.
+KRIYA lets a user program a **financial mandate** onchain (an objective plus hard limits) instead of individual transactions. Then it runs that mandate:
 
-**AI proposes · Rules constrain · Verifiable infrastructure verifies · Smart contracts enforce.**
+1. **Market truth.** The **KRIYA Market Risk Engine** turns live **CoinMarketCap** market data, **Atlas** onchain oracle prices and **Cournot** event probabilities into a risk score for every strategy, including a **tokenized T-Bill (RWA)** vault.
+2. **Verify.** The keeper writes those scores onchain on **BNB Chain**.
+3. **Decide.** **Claude** proposes an allocation, with persistent memory of past market regimes and its own past decisions from **Living Brain** (ChatAndBuild).
+4. **Enforce.** **KriyaExecutor** checks every allocation against the mandate onchain, and reads the **Atlas** stablecoin feed onchain as a depeg circuit breaker. Anything outside the limits reverts.
+
+**AI proposes · market data sets the risk · rules constrain · BNB Chain contracts enforce.**
+
+Built for **BNB Bangkok 2026**: Developer Track (RWA + onchain AI agents), CoinMarketCap × Atlas, Cournot, and ChatAndBuild Living Brain.
 
 ---
 
-## BNB Bangkok 2026: KRIYA on BNB Chain, driven by live market data
-
-At BNB Bangkok, KRIYA moved to **BNB Chain** and its risk view moved from a demo feed to **live market intelligence**. In practice, three things changed:
-
-1. **Risk comes from the market.** The **KRIYA Market Risk Engine** turns **CoinMarketCap** market data, **Atlas** onchain oracle prices and **Cournot** event probabilities into a verified risk score for every strategy. Chainlink CRE (or the keeper) writes those scores onchain, and that is what triggers rebalances.
-2. **The agent remembers.** **Living Brain** (ChatAndBuild) is KRIYA's persistent memory. It stores every market regime and every decision, and Claude recalls similar past regimes and its own past calls before each new decision.
-3. **Real-world assets are in the strategy universe.** Strategy C is a **tokenized T-Bill (RWA)** vault. Stablecoin-peg risk measured by Atlas is applied to it and to the lending strategy.
-
-**Claude still decides** (with the deterministic optimizer as a fallback). Rules still constrain, CRE verifies, and the contract enforces. Living Brain gives the agent memory; it does not replace its reasoning.
-
-### Live on BNB Chain testnet (chain 97)
+## Live on BNB Chain testnet (chain 97)
 
 | Contract | Address |
 | --- | --- |
-| KriyaExecutor (CRE receiver) | `TODO after ./scripts/deploy-bsc.sh` |
+| KriyaExecutor | `TODO after ./scripts/deploy-bsc.sh` |
 | KriyaVault | `TODO` |
 | KriyaMandate | `TODO` |
 | KriyaStrategyRegistry | `TODO` |
 | Test USDC | `TODO` |
 | Strategy A / B / C | `TODO` |
-| Chainlink CRE MockKeystoneForwarder (`binance_smart_chain-testnet`) | `0xA238e42cb8782808DBb2F37E19859244ec4779B0` |
 | Atlas feeds read by the engine (BNB/USD, USDT/USD, USDC/USD) | `TODO` |
+| Atlas feed read **onchain by KriyaExecutor** (peg guard) | `TODO` |
 
 | Step | Tx |
 | --- | --- |
 | Open mandate | `TODO` |
+| Initial allocation (with onchain Atlas `PegChecked` event) | `TODO` |
+| Guardrail revert (`ExposureExceeded`) | `TODO` |
 | Market Risk Engine → VERIFY (risk written onchain) | `TODO` |
 | Rebalance driven by live market risk | `TODO` |
-| Guardrail revert (`ExposureExceeded`) | `TODO` |
 
-### The market loop
+Live app: `TODO` · Demo video: `TODO` · One-page write-up: [docs/BNB_BANGKOK_WRITEUP.md](docs/BNB_BANGKOK_WRITEUP.md)
+
+---
+
+## How it works
 
 ```
 CoinMarketCap Pro API ─┐  BNB volatility, Fear & Greed, stablecoin quotes
-Atlas onchain feeds ───┼─► KRIYA Market Risk Engine ─► /api/risk-feed ─► CRE / keeper VERIFY ─► registry (onchain)
-Cournot oracle ────────┘  P(market-stress event)       (web/src/lib/riskModel.ts, pure + tested)        │
-                                                                                                        ▼
+Atlas feeds (BNB Chain)┼─► KRIYA Market Risk Engine ─► risk feed ─► keeper VERIFY ─► KriyaStrategyRegistry (onchain)
+Cournot oracle ────────┘  P(market-stress event)      web/src/lib/riskModel.ts (pure, unit-tested)        │
+                                                                                                         ▼
 Living Brain ◄── remembers regimes + decisions ◄── Claude DECIDE (recalls memory) ◄── DETECT mandate breach
                                                         │
-                                       CONSTRAIN (policy) → EXECUTE (KriyaExecutor enforces onchain)
+                                    CONSTRAIN (policy engine) → EXECUTE: KriyaExecutor
+                                                                  ├─ validateAllocation (mandate, onchain)
+                                                                  └─ Atlas peg guard (reads the feed onchain)
 ```
 
 | Strategy | Live risk factors (added to the base score) |
 | --- | --- |
-| A, Stable Lending (base 21) | Stablecoin peg: worst of USDT/USDC deviation × 20, max +30 (Atlas preferred, CMC fallback) · extreme fear (Fear & Greed ≤ 20) +3 |
-| B, BNB/USDT LP Yield (base 34) | BNB volatility: \|24h\|×1.5 + \|7d\|×0.5, max +25 (CMC) · Atlas vs CMC price gap > 2% +5 · Fear & Greed ≥ 80 +3 or ≤ 20 +5 · Cournot stress probability: (p − 0.2) × 25 |
-| C, Tokenized T-Bill, RWA (base 15) | Stablecoin peg at half weight (settles in USDC) |
+| A, Stable Lending (base 21) | Stablecoin peg: worst USDT/USDC deviation × 20, max +30 (Atlas preferred, CMC fallback) · extreme fear (Fear & Greed ≤ 20) +3 |
+| B, BNB/USDT LP Yield (base 34) | BNB volatility: \|24h\|×1.5 + \|7d\|×0.5, max +25 (CMC) · Atlas vs CMC BNB price gap > 2% +5 · Fear & Greed ≥ 80 +3 or ≤ 20 +5 · Cournot stress probability: round(max(0, p − 0.2) × 25) |
+| C, Tokenized T-Bill, RWA (base 15) | Stablecoin peg at half weight (settles in a stablecoin) |
 
-A 6.5% BNB drop in a day (with −9% on the week) adds +14 to Strategy B, taking it from 34 to 48. That breaches a max-risk-40 mandate, so KRIYA exits B. This is tested end to end onchain (`web/scripts/e2e-market.mjs`). Manual "change reality" controls still work as scenario overrides on top of live data until reset.
-
-### Cournot Integration
-
-- **Where it's called:** `web/src/lib/server/market/cournot.ts`, from the dashboard's *Event risk* panel through `POST /api/market/cournot`. `resolve` (free) matches the claim to Cournot markets. `assess` calls `POST /intelligence/v1/probability`, with the `COURNOT-API-KEY` header kept server-side.
-- **How the probability is used:** the user marks the claim as a *stress* or *relief* scenario. The stress probability `p` adds an event-risk premium of `round(max(0, p − 0.2) × 25)` to the BNB LP strategy's verified risk (`web/src/lib/riskModel.ts`). If that pushes the strategy above the mandate's max risk, the next loop verifies the score onchain and Claude moves the capital out. Mocked, hardcoded or static probabilities are never used: without a live assessment, the factor is simply absent.
-- **Where users see the claim and evidence:** the *Market intelligence → Event risk* panel shows the exact claim, the returned probability, its effect, and Cournot's `result` and `basis` rendered verbatim. The *Live risk per strategy* list shows the resulting "Event risk (forward-looking)" factor tagged `[Cournot]`. KRIYA's own text (the effect line) is kept separate from Cournot's output.
-- **Proof of a successful call:** every call's sanitized request and response is stored with an id and request id (`GET /api/market` → `evidence.cournotProofs`), and the latest assessment is journaled in the activity timeline. Example: `TODO proof id / request id`.
-
-### CoinMarketCap × Atlas
-
-- **CoinMarketCap Pro API** (`web/src/lib/server/market/cmc.ts`, server-side only): `/v2/cryptocurrency/quotes/latest` (BNB, USDT, USDC) and `/v3/fear-and-greed/latest` are core inputs to the risk model. Every call is logged (endpoint, HTTP status, credits) and shown in the dashboard as proof of live usage.
-- **Atlas Oracle** (`web/src/lib/server/market/atlas.ts`): AggregatorV3-compatible feeds read **onchain on BNB Chain** (`ATLAS_FEED_BNB_USD`, `ATLAS_FEED_USDT_USD`, `ATLAS_FEED_USDC_USD`). Atlas is the preferred source for stablecoin pegs (stale feeds are ignored), and Atlas BNB/USD is cross-checked against CMC.
-- One-page write-up: [docs/BNB_BANGKOK_WRITEUP.md](docs/BNB_BANGKOK_WRITEUP.md).
-
-### Living Brain (ChatAndBuild)
-
-- `web/src/lib/server/memory.ts` uses `@living-brain/sdk`, with one isolated subject for the market and one per mandate owner.
-- **Remember:** every market regime (when scores move, or every 30 minutes), every decision (trigger, market, allocation, rationale), and every onchain execution or refusal.
-- **Retrieve:** before each decision, KRIYA searches for similar past regimes and the mandate's own decision history.
-- **Connect:** the memories go into Claude's context, and Claude is instructed to cite them when they change its decision. The decision card shows exactly what was recalled. *Generate weekly market brief* asks Living Brain to synthesize everything KRIYA observed this week.
-
-### Deploy to BNB Chain testnet
-
-```bash
-PRIVATE_KEY=0x... AGENT_ADDRESS=0x... ./scripts/deploy-bsc.sh
-```
-
-Then copy `web/.env.example` to `web/.env.local`, set `NEXT_PUBLIC_CHAIN_ID=97` and the keys, and run `npm run dev`. For Chainlink CRE on BNB Chain:
-
-```bash
-cd cre && cre workflow simulate kriya-workflow --target bnb-settings --non-interactive --trigger-index 0 --broadcast
-```
-
-### Business model and roadmap
-
-- **Revenue:** a management fee on capital under mandate (0.25–0.5% a year), plus a B2B API that lets wallets and RWA issuers offer "mandates, not transactions" to their users.
-- **Next:** real BNB Chain venues for strategies A to C (lending markets, PancakeSwap LP, tokenized T-bill issuers), more Atlas feeds per asset, a per-user vault factory, a production CRE deployment, an audit, then mainnet.
-
----
-
-## Live on Monad testnet (Metropolis)
-
-**App:** https://kriya-monad.vercel.app · chain id 10143 · [CRE simulation log](docs/cre/monad-simulation-broadcast.log)
-
-| Contract | Address |
-| --- | --- |
-| KriyaExecutor (Chainlink CRE receiver) | [`0x9c5f1A2326Fa1C16e04Ecf32C60091150161656A`](https://testnet.monadexplorer.com/address/0x9c5f1A2326Fa1C16e04Ecf32C60091150161656A) |
-| KriyaVault | [`0xd167B393646E39A01bB14A4e0C53A96940C249ee`](https://testnet.monadexplorer.com/address/0xd167B393646E39A01bB14A4e0C53A96940C249ee) |
-| KriyaMandate | [`0x97FD1b5af7622377744C8c2F44F4fF3A04a52073`](https://testnet.monadexplorer.com/address/0x97FD1b5af7622377744C8c2F44F4fF3A04a52073) |
-| KriyaStrategyRegistry | [`0xadAE9Abccf4fE599405C39bC19A4686566dEd7b6`](https://testnet.monadexplorer.com/address/0xadAE9Abccf4fE599405C39bC19A4686566dEd7b6) |
-| Test USDC | [`0x17Be8BA91d0f331B198eFe73Dd272f9C492d471D`](https://testnet.monadexplorer.com/address/0x17Be8BA91d0f331B198eFe73Dd272f9C492d471D) |
-| Strategy A / B / C | [`0xE92168d45CAf4ec291ce78E727e90015D50e2032`](https://testnet.monadexplorer.com/address/0xE92168d45CAf4ec291ce78E727e90015D50e2032) / [`0xe62bE538B87fb492FCf977b1Ddf7ee7202148006`](https://testnet.monadexplorer.com/address/0xe62bE538B87fb492FCf977b1Ddf7ee7202148006) / [`0x5d59Be06B7518EF3438194226826487d35a5f6fd`](https://testnet.monadexplorer.com/address/0x5d59Be06B7518EF3438194226826487d35a5f6fd) |
-| Chainlink CRE MockKeystoneForwarder (monad-testnet) | [`0xB9F79d863261869B234c481D1f9A7af84AeAd192`](https://testnet.monadexplorer.com/address/0xB9F79d863261869B234c481D1f9A7af84AeAd192) |
-
-| Step | Tx |
-| --- | --- |
-| Open $1,000 demo mandate | [`0x78b36c7e…8fa6`](https://testnet.monadexplorer.com/tx/0x78b36c7e962407dd964d52a683bea2c350039e6a800507e1938d072d51d38fa6) |
-| **Chainlink CRE** (`cre workflow simulate --target monad-settings --broadcast`): DETECT idle capital → DECIDE → CONSTRAIN → EXECUTE B 40 · A 35 · reserve 25, logged onchain as `source = CRE` | [`0x1aacc62c…4079`](https://testnet.monadexplorer.com/tx/0x1aacc62c5cc1f8e6a7449a271477406b4ffa383e475848a733129cc18a414079) |
-| Guardrail test: agent submits 60% into Strategy B (cap 40%) → **reverted onchain** with `ExposureExceeded(B, 6000, 4000)` | [`0xe8c15294…9466`](https://testnet.monadexplorer.com/tx/0xe8c15294f562bb813e5a439a74830733cfb73b42d86b1c3be144e59016549466) |
-| **Chainlink CRE** VERIFY: external risk feed says Strategy B 34 → 48; signed report → `onReport` → registry | [`0x4789f3eb…97de`](https://testnet.monadexplorer.com/tx/0x4789f3eba6f41ebf39320651474d8be54bdb6e5b2c473abdbac4a1fa691997de) |
-| **Chainlink CRE** EXECUTE (same run, 16 blocks / ~5 s later): mandate breach detected → exit B → A 40 · C 35 · reserve 25, portfolio risk 14/40 | [`0x58557a0a…7d0b`](https://testnet.monadexplorer.com/tx/0x58557a0a88875b078d240543b88f6fc80d81d6a3df1aee997e328d8565e37d0b) |
-
-| **Chainlink CRE, run 3 — Claude decides live** (2026-10-14): VERIFY Strategy C 15 → 45 | [`0x1a4163a3…389a`](https://testnet.monadexplorer.com/tx/0x1a4163a3f30a11ac2493f8c458aca83352f86beee7a69999af4c563094fa389a) |
-| EXECUTE: Claude (`claude-sonnet-5-5`) exits C, keeps A at its 40% cap, 60% reserve, portfolio risk 9/40, `source = CRE` | [`0x34d2a213…1ca0`](https://testnet.monadexplorer.com/tx/0x34d2a213896b353b6d05c22d8e4dcbb32a6d7f78ee2e6f213c12c5045b2b1ca0) |
-
-Full CLI output of the second run: [`docs/cre/monad-simulation-broadcast-2.log`](docs/cre/monad-simulation-broadcast-2.log). Dashboard after the run:
-
-![KRIYA on Monad testnet](docs/monad-dashboard.jpg)
-
-### Why Monad
-
-KRIYA is an *autonomous* loop: every run can verify risk, rebalance several positions and log its decision onchain. That only works as a continuous, per-user service when settlement is fast and cheap.
-
-- **400 ms blocks, ~800 ms finality.** A verified risk change and the rebalance that answers it land seconds apart, so a mandate spends almost no time outside its limits. The dashboard streams each step as it is confirmed.
-- **Cheap execution.** Constraint checks run fully onchain on every allocation (exposure, per-strategy and portfolio risk, reserve, drawdown). On Monad that costs fractions of a cent, so rebalancing small mandates often is viable.
-- **Full EVM compatibility.** The same Solidity, Foundry tests and Chainlink CRE workflow run unchanged; the CRE CLI supports `monad-testnet` natively.
-- **Parallel execution.** Per-user mandates and vault positions are independent state, which suits Monad's parallel execution as the number of mandates grows.
-
-### Roadmap
-
-- **Cross-chain mandates via Chainlink CCIP.** One mandate spanning several chains (for example Monad and Ethereum): CRE decides the allocation, CCIP moves the capital and carries the execution instruction, and the mandate is enforced onchain on each chain before funds move.
-
-## Live on Ethereum Sepolia
-
-**App:** https://kriya-beta.vercel.app (any mandate can be viewed read-only: [demo mandate](https://kriya-beta.vercel.app/?view=0x09855cE865D094F6c2F2B5A13F64FC6F82b3B4C7))
-
-| Contract | Address |
-| --- | --- |
-| KriyaExecutor (CRE receiver) | [`0x9c5f1A2326Fa1C16e04Ecf32C60091150161656A`](https://sepolia.etherscan.io/address/0x9c5f1A2326Fa1C16e04Ecf32C60091150161656A) |
-| KriyaVault | [`0xd167B393646E39A01bB14A4e0C53A96940C249ee`](https://sepolia.etherscan.io/address/0xd167B393646E39A01bB14A4e0C53A96940C249ee) |
-| KriyaMandate | [`0x97FD1b5af7622377744C8c2F44F4fF3A04a52073`](https://sepolia.etherscan.io/address/0x97FD1b5af7622377744C8c2F44F4fF3A04a52073) |
-| KriyaStrategyRegistry | [`0xadAE9Abccf4fE599405C39bC19A4686566dEd7b6`](https://sepolia.etherscan.io/address/0xadAE9Abccf4fE599405C39bC19A4686566dEd7b6) |
-| Test USDC | [`0x17Be8BA91d0f331B198eFe73Dd272f9C492d471D`](https://sepolia.etherscan.io/address/0x17Be8BA91d0f331B198eFe73Dd272f9C492d471D) |
-| Strategy A / B / C | [`0xE92168d45CAf4ec291ce78E727e90015D50e2032`](https://sepolia.etherscan.io/address/0xE92168d45CAf4ec291ce78E727e90015D50e2032) / [`0xe62bE538B87fb492FCf977b1Ddf7ee7202148006`](https://sepolia.etherscan.io/address/0xe62bE538B87fb492FCf977b1Ddf7ee7202148006) / [`0x5d59Be06B7518EF3438194226826487d35a5f6fd`](https://sepolia.etherscan.io/address/0x5d59Be06B7518EF3438194226826487d35a5f6fd) |
-| Chainlink forwarder (simulation) | [`0x15fC6ae953E024d975e77382eEeC56A9101f9F88`](https://sepolia.etherscan.io/address/0x15fC6ae953E024d975e77382eEeC56A9101f9F88) |
-
-End-to-end loop executed on Sepolia:
-
-| Step | Tx |
-| --- | --- |
-| Open $1,000 mandate | [`0x7b0fd91d…`](https://sepolia.etherscan.io/tx/0x7b0fd91db394dd1156e0c37d1383eb5752e39e444f4458a822a6e9e4601b554f) |
-| Initial allocation (B 40 · A 35 · Reserve 25) | [`0x6a779a47…`](https://sepolia.etherscan.io/tx/0x6a779a47e15b4ce9b1340f3e5d56dc878c128257c3dcb39cdf8b760661f9cd25) |
-| Guardrail: unsafe 60% proposal **reverted** (`ExposureExceeded`) | [`0x6eee86fd…`](https://sepolia.etherscan.io/tx/0x6eee86fd1dd39e1c9f939d4e04c92bc1d477eecec828c89553fcfe4eba3077b9) |
-| Verified risk change: Strategy B 34 → 48 | [`0x8b7f4aa0…`](https://sepolia.etherscan.io/tx/0x8b7f4aa068c2856977b37168864e2b701ebf5771c9af05c5cf69201ab123dfa4) |
-| Autonomous rebalance (A 40 · C 35 · Reserve 25) | [`0x96727352…`](https://sepolia.etherscan.io/tx/0x967273526aeabd1a3a7663ac70cf32c7060110ebc9150529f7b165dd63619d04) |
-
-> **Decision engine:** Claude (`claude-sonnet-5-5`) proposes allocations as schema-bound JSON; the policy engine, the CRE workflow and the executor contract each re-validate it. If Claude is unavailable (or `KRIYA_LLM=off`), the transparent deterministic optimizer takes over.
-
-**Chainlink CRE workflow** — full simulation evidence: [docs/CRE_SIMULATION.md](docs/CRE_SIMULATION.md) (`cre workflow simulate kriya-workflow --broadcast`), reports delivered through the Sepolia Keystone forwarder, decision by Claude (`claude-sonnet-5-5`):
-
-| CRE step | Tx |
-| --- | --- |
-| VERIFY: risk report, Strategy B 34 → 48 | [`0x66deb846…`](https://sepolia.etherscan.io/tx/0x66deb846f9d9a4d33b2a5a6ff6635a5c1b9692064479274e7eac8cd1498136b9) |
-| DETECT → DECIDE (Claude) → CONSTRAIN → EXECUTE: rebalance to A 40 · C 35 · Reserve 25, risk 14/40 (`source = CRE`) | [`0x2d8a4366…`](https://sepolia.etherscan.io/tx/0x2d8a4366bf67a6f5e7a9f7ce6b3aff2556921ba8c22e0c7af91b914a983441d5) |
-| VERIFY: risk restored, Strategy B 48 → 34 (mandate safe, no rebalance) | [`0xd4fc8b94…`](https://sepolia.etherscan.io/tx/0xd4fc8b94dba0810391055ffa6fee49c8034c50d26f54b8c66234ba2fe46db59f) |
-
-## The loop
-
-```
-User mandate ──► KriyaVault.openMandate (capital + objective + limits, one tx)
-                         │
-   ┌─────────────── Chainlink CRE workflow (cron) ────────────────┐
-   │ OBSERVE   HTTP: external risk feed (DON consensus)            │
-   │           EVM read: strategies, mandates, positions           │
-   │ VERIFY    risk changed? → signed report → registry update     │
-   │ DETECT    mandate health under verified risk                  │
-   │ DECIDE    HTTP POST → KRIYA agent (Claude) → allocation JSON  │
-   │ CONSTRAIN shared policy re-validates the proposal in-workflow │
-   │ EXECUTE   signed report → KriyaExecutor.onReport              │
-   └──────────────────────────────┬───────────────────────────────┘
-                                  ▼
-       KriyaExecutor.validateAllocation (onchain, final authority)
-             pass → rebalance vault ⇄ strategies     fail → revert
-```
-
-The same rulebook (`web/src/lib/policy.ts`) is used by the agent, by the CRE workflow (imported directly and compiled to WASM), and mirrored in Solidity in `KriyaExecutor.validateAllocation`. The LLM's output is never trusted. It is parsed into a typed allocation, validated three times, and the contract has the final word.
-
-## Repository
-
-| Path | What |
-| --- | --- |
-| `contracts/` | Foundry. `KriyaVault`, `KriyaMandate`, `KriyaExecutor` (CRE receiver), `KriyaStrategyRegistry`, mock USDC + strategy vaults. 17 tests. |
-| `web/` | Next.js dashboard + agent server: Claude decision engine, policy engine, risk feed, keeper fallback, API for CRE. |
-| `cre/` | Chainlink CRE project: `kriya-workflow` (TypeScript → WASM). |
-| `scripts/deploy-sepolia.sh` | Deploy + wire web and CRE to new addresses. |
-
-### Contracts
-
-- **KriyaMandate** stores each user's `Params { maxRisk, maxExposureBps, maxDrawdownBps, minReserveBps, autoRebalance, objective }` and allowlisted strategies. The user can pause it at any time (human override).
-- **KriyaVault** handles custody and per-user accounting. Funds move **only** vault ⇄ registered strategies (executor-only) or back to their owner. `emergencyExit()` pulls everything back to the reserve.
-- **KriyaExecutor** is the enforcement layer. It has two entry points that run the *same* validation:
-  - `onReport` (Chainlink Keystone forwarder only): report kind `1` = verified risk update, `2` = allocation
-  - `executeAllocation` (agent key): a fallback path with no extra powers
-
-  Reverts with typed errors: `ExposureExceeded`, `StrategyRiskExceeded`, `PortfolioRiskExceeded`, `ReserveBelowMinimum`, `StrategyNotAllowed`, `DuplicateStrategy`, `DrawdownExceeded`, `MandateInactive`, `AutoRebalanceDisabled`, `ProtocolPaused`.
-- **KriyaStrategyRegistry** holds the allowlisted strategy universe and verified risk scores (written by CRE reports through the executor, or by the owner).
-
-Risk model: a held strategy's risk must be ≤ `maxRisk`, and portfolio risk `Σ(bps·risk) + reserveBps·2` / 10000 must be ≤ `maxRisk`.
-
-### Demo strategies (controlled testnet universe)
-
-| Strategy | APY | Risk |
-| --- | --- | --- |
-| A, Stable Lending | 8.4% | 21 |
-| B, LP Yield | 11.2% | 34 |
-| C, T-Bill Vault | 6.8% | 15 |
-| USDC Reserve | — | 2 |
-
-These are mock strategy vaults that **really hold the test USDC** (every move is a real ERC-20 transfer). Yields and risk scores are demo parameters and are labelled as such. Nothing is simulated state presented as real.
+Example, tested end to end onchain: BNB −9.4% in 24h and −14.2% over 7d pushes Strategy B above a max-risk-40 mandate. The keeper writes the new score onchain, Claude exits B, and KriyaExecutor enforces the new allocation.
 
 Demo mandate: $1,000 · max risk 40 · max exposure 40% · min reserve 25% · max drawdown 5% · auto-rebalance on.
 
 | | Allocation | Portfolio risk |
 | --- | --- | --- |
 | Initial | B 40% · A 35% · Reserve 25% | 21 / 40 |
-| B risk 34 → 48 | B now breaches max risk 40 → **MANDATE AT RISK** | — |
+| Market sell-off | B breaches max risk 40 → **MANDATE AT RISK** | — |
 | After rebalance | A 40% · C 35% · Reserve 25% | 14 / 40 |
 | Unsafe proposal (B 60%) | **reverts onchain** with `ExposureExceeded` | — |
+| USDT off peg (Atlas) | **no position may grow** (`DeploymentFrozenByPeg`); exits still allowed | — |
+
+The strategies are mock vaults that **really hold the test stablecoin** (every move is a real ERC-20 transfer). APYs and base risk scores are demo parameters and are labelled as such.
 
 ---
 
-## Run locally (Anvil, no testnet funds needed)
+## CoinMarketCap × Atlas
 
-```bash
-anvil
-```
+**CoinMarketCap Pro API** (`web/src/lib/server/market/cmc.ts`, server-side only)
+
+| Endpoint | Why |
+| --- | --- |
+| `/v2/cryptocurrency/quotes/latest` (BNB, USDT, USDC) | BNB 24h/7d moves set the LP strategy's volatility risk (impermanent-loss exposure). USDT/USDC quotes are the peg fallback. |
+| `/v3/fear-and-greed/latest` | Market regime: extreme fear adds withdrawal and liquidity risk, extreme greed adds reversal risk. |
+
+Every call is logged (endpoint, HTTP status, credits) and shown in the dashboard under *CoinMarketCap call log*, and in `GET /api/market` → `evidence.cmcCalls`. The key never reaches the browser or the repository. Responses are cached for 60 seconds to protect credits.
+
+**Atlas Oracle** is used in two places:
+
+1. **Offchain risk engine** (`web/src/lib/server/market/atlas.ts`): reads the AggregatorV3-compatible Atlas feeds on BNB Chain (`ATLAS_FEED_BNB_USD`, `ATLAS_FEED_USDT_USD`, `ATLAS_FEED_USDC_USD`). Atlas is the primary source for stablecoin pegs (stale feeds are ignored), and Atlas BNB/USD is cross-checked against CoinMarketCap.
+2. **Onchain enforcement** (`contracts/src/KriyaExecutor.sol`): with `setPegGuard(feed, maxDepegBps, maxFeedAge)`, every execution reads the Atlas stablecoin feed **inside the transaction** and emits `PegChecked(feed, price, updatedAt, depegBps, frozen)` as verifiable evidence. If the stablecoin is more than `maxDepegBps` off $1, no position may grow (`DeploymentFrozenByPeg`), and a stale feed blocks execution (`StalePegFeed`). Exits and reductions still go through. `pegStatus()` exposes the live reading, and the dashboard shows it under *Onchain peg guard*.
+
+## Cournot Integration
+
+- **Where it's called:** `web/src/lib/server/market/cournot.ts`, from the dashboard's *Market intelligence → Event risk* panel through `POST /api/market/cournot`. `resolve` (free) matches the claim to Cournot markets. `assess` calls `POST /intelligence/v1/probability`, with the `COURNOT-API-KEY` header kept server-side. Calls are user-triggered only and never retried.
+- **How the probability is used:** the user marks the claim as a *stress* or *relief* scenario. The stress probability `p` adds an event-risk premium of `round(max(0, p − 0.2) × 25)` to the BNB LP strategy's risk (`web/src/lib/riskModel.ts`). If that pushes the strategy above the mandate's max risk, the next loop writes the score onchain and Claude moves the capital out. Without a live assessment the factor is simply absent: mocked, hardcoded or static probabilities are never used.
+- **Where users see the claim and evidence:** the *Event risk* panel shows the exact claim, the returned probability, the Cournot request ID and market IDs, and Cournot's `result` and `basis` rendered **verbatim** under *Evidence returned by Cournot*. KRIYA's own explanation sits in a separate box labelled **"Added by KRIYA, not by Cournot"**. The *Live risk per strategy* list shows the resulting "Event risk (forward-looking)" factor tagged `[Cournot]`.
+- **Proof of a successful call:** every call's sanitized request and response is stored with an ID and request ID (`GET /api/market` → `evidence.cournotProofs`). Example: `TODO proof id / request id`.
+
+## Living Brain (ChatAndBuild)
+
+`web/src/lib/server/memory.ts` uses `@living-brain/sdk`, with one isolated subject for the market and one per mandate owner.
+
+- **Remember:** every market regime (when scores move, or every 30 minutes), every decision (trigger, market, allocation, rationale), and every onchain execution or refusal.
+- **Retrieve:** before each decision, KRIYA searches for similar past regimes and the mandate's own decision history.
+- **Connect:** the memories go into Claude's context, and Claude is told to cite them when they change its decision. The decision card shows exactly what was recalled and whether it came from Living Brain or the local fallback. *Generate weekly market brief* asks Living Brain to synthesize everything KRIYA observed.
+
+---
+
+## Setup
+
+Requirements: Node 20+, [Foundry](https://book.getfoundry.sh/getting-started/installation).
+
+### Run locally (Anvil, no keys or testnet funds needed)
 
 ```bash
 cd contracts && forge test
 ```
 
 ```bash
-cd contracts && PRIVATE_KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 AGENT_ADDRESS=0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC CRE_FORWARDER=0x70997970C51812dc3A010C7d01b50e0d17dc79C8 forge script script/Deploy.s.sol --rpc-url http://127.0.0.1:8545 --broadcast
+anvil
+```
+
+```bash
+cd contracts && PRIVATE_KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 AGENT_ADDRESS=0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC forge script script/Deploy.s.sol --rpc-url http://127.0.0.1:8545 --broadcast
 ```
 
 ```bash
 cd web && npm install && npm run sync && npm run dev
 ```
 
-`web/.env.local` for Anvil uses the public Anvil dev keys:
+`web/.env.local` for Anvil (public Anvil dev keys):
 
 ```
 NEXT_PUBLIC_CHAIN_ID=31337
 ADMIN_PRIVATE_KEY=<anvil account 0>
 AGENT_PRIVATE_KEY=<anvil account 2>
-ANTHROPIC_API_KEY=<your key>
+ANTHROPIC_API_KEY=<optional: without it the deterministic optimizer decides>
 ```
 
-Add the Anvil network to MetaMask (RPC `http://127.0.0.1:8545`, chain id 31337), import an Anvil account, and open http://localhost:3000. Any mandate can be viewed read-only at `/?view=<address>`.
+Add the Anvil network to MetaMask (RPC `http://127.0.0.1:8545`, chain id 31337), import an Anvil account and open http://localhost:3000. Any mandate can be viewed read-only at `/?view=<address>`.
 
-## Deploy to Ethereum Sepolia
+The full market flow also runs locally with no keys: `./scripts/e2e-market-local.sh` starts Anvil, deploys Atlas-style mock feeds, switches on the peg guard, and serves CoinMarketCap and Cournot from local fixtures.
 
-1. Create two keys: a funded **deployer** and an **agent** key (fund the agent with a little Sepolia ETH as well).
-2. Deploy and wire everything:
-   ```bash
-   PRIVATE_KEY=0x... AGENT_ADDRESS=0x... ETHERSCAN_API_KEY=... ./scripts/deploy-sepolia.sh
-   ```
-   The executor trusts the Sepolia **MockKeystoneForwarder** `0x15fC6ae953E024d975e77382eEeC56A9101f9F88` used by `cre workflow simulate --broadcast`. For a production CRE deployment, call `setForwarderAddress` with the production Keystone forwarder.
-3. Set `web/.env.local` from `web/.env.example` (`NEXT_PUBLIC_CHAIN_ID=11155111`, `AGENT_PRIVATE_KEY`, `ADMIN_PRIVATE_KEY`, `ANTHROPIC_API_KEY`).
+### Deploy to BNB Chain testnet
 
-## Run the Chainlink CRE workflow
+Fund two wallets with tBNB (https://www.bnbchain.org/en/testnet-faucet), then:
 
 ```bash
-cre login
+PRIVATE_KEY=0x... AGENT_ADDRESS=0x... ATLAS_PEG_FEED=0x... ./scripts/deploy-bsc.sh
 ```
 
-```bash
-cd cre/kriya-workflow && bun install
-```
+`ATLAS_PEG_FEED` (an Atlas USDT/USD or USDC/USD feed on BSC testnet) is optional: the script checks that it answers `latestRoundData()` before deploying. Add `ETHERSCAN_API_KEY` to verify the contracts on testnet.bscscan.com. The script writes `contracts/deployments/97.json` and syncs the web app.
 
-```bash
-cd cre && cp .env.example .env
-```
+Then copy `web/.env.example` to `web/.env.local`, set `NEXT_PUBLIC_CHAIN_ID=97` and the keys (`AGENT_PRIVATE_KEY`, `ADMIN_PRIVATE_KEY`, `ANTHROPIC_API_KEY`, `CMC_API_KEY`, `ATLAS_FEED_*`, `COURNOT_API_KEY`, `LIVING_BRAIN_API_KEY`), and run `npm run dev`. All keys are used server-side only.
 
-Put a funded Sepolia key (no `0x`) in `cre/.env` as `CRE_ETH_PRIVATE_KEY`. With the web app running on `localhost:3000`:
+---
 
-```bash
-cd cre && cre workflow simulate kriya-workflow --target staging-settings --non-interactive --trigger-index 0 --broadcast
-```
+## Repository
 
-Each run executes one full loop. Writes go through the MockKeystoneForwarder into `KriyaExecutor.onReport`, and the dashboard tags these executions **CHAINLINK CRE**.
+| Path | What |
+| --- | --- |
+| `contracts/` | Foundry: `KriyaVault`, `KriyaMandate`, `KriyaExecutor` (mandate enforcement + Atlas peg guard), `KriyaStrategyRegistry`, mock stablecoin, strategy vaults and Atlas-style feed |
+| `web/` | Next.js dashboard and agent server: Market Risk Engine, Claude decision engine, Living Brain memory, policy engine, keeper loop |
+| `scripts/deploy-bsc.sh` | Deploy to BNB Chain testnet and wire the web app |
+| `scripts/e2e-market-local.sh` | Market end-to-end run on Anvil with no keys |
 
-The **Run autonomous loop** button in the dashboard runs the identical loop from the KRIYA server (agent + owner keys) as a fallback when CRE is unavailable. Those executions are tagged **AGENT**.
+### Contracts
+
+- **KriyaMandate** stores each user's `Params { maxRisk, maxExposureBps, maxDrawdownBps, minReserveBps, autoRebalance, objective }` and allowlisted strategies. The user can pause it at any time.
+- **KriyaVault** handles custody and per-user accounting. Funds move **only** between the vault and registered strategies (executor-only) or back to their owner. `emergencyExit()` pulls everything back to the reserve and pauses the mandate.
+- **KriyaExecutor** is the enforcement layer. `executeAllocation` (agent key only) runs `validateAllocation` and the Atlas peg guard, then rebalances. Typed reverts: `ExposureExceeded`, `StrategyRiskExceeded`, `PortfolioRiskExceeded`, `ReserveBelowMinimum`, `StrategyNotAllowed`, `DuplicateStrategy`, `DrawdownExceeded`, `MandateInactive`, `AutoRebalanceDisabled`, `ProtocolPaused`, `DeploymentFrozenByPeg`, `StalePegFeed`.
+- **KriyaStrategyRegistry** holds the allowlisted strategy universe and the verified risk scores the keeper writes.
+
+Risk rule: every held strategy's risk must be ≤ `maxRisk`, and portfolio risk `(Σ bps·risk + reserveBps·2) / 10000` must be ≤ `maxRisk`.
 
 ## Testing
 
 | Layer | What runs | Command |
 | --- | --- | --- |
-| Contracts | 19 unit tests + 4 fuzz properties (1,000 runs each): funds are always conserved, `validateAllocation` always agrees with execution, every executed allocation leaves the mandate compliant, a strategy above max risk can never be held | `cd contracts && forge test` |
-| Policy engine | 12 tests mirroring the contract cases, plus 2,000 random mandates checking the optimizer never produces an invalid allocation | `cd web && npm test` |
-| Risk model | 7 tests for the Market Risk Engine (volatility, depeg, Cournot premium, oracle disagreement, clamping, deterministic order) | `cd web && npm test` |
-| Market end to end | 8 checks against Anvil with AggregatorV3 feeds and CMC/Cournot fixtures: calm market stays safe, BNB sell-off breaches the mandate, loop verifies onchain and exits the LP strategy, Living Brain recall, Cournot premium, scenario overrides | `cd web && node scripts/e2e-market.mjs` (setup in the file header) |
+| Contracts | 25 unit tests (including the Atlas peg guard: on-peg, depeg freeze, exits during depeg, stale feed, access control) + 4 fuzz properties (1,000 runs each: funds conserved, validator agrees with execution, every execution leaves the mandate compliant, a strategy above max risk is never held) | `cd contracts && forge test` |
+| Web | 44 tests: policy engine (incl. 2,000 random mandates), Market Risk Engine model, demo flow, errors, streaming | `cd web && npm test` |
 | End to end | 15 checks against Anvil + the real API + wallet transactions: open mandate, allocate, guardrail revert, risk spike, verified rebalance, emergency exit, input validation, rate limits | `cd web && npm run e2e` (setup in `web/scripts/e2e.mjs`) |
-| CRE workflow | Typecheck + WASM build | `cd cre && cre workflow build kriya-workflow` |
+| Market end to end | 10 checks: CMC + Atlas scoring, sell-off breach, onchain verify and exit, Atlas `PegChecked` evidence, depeg freeze and recovery, Living Brain recall, Cournot premium, scenario overrides | `./scripts/e2e-market-local.sh` |
 
-GitHub Actions runs all of it, including the end-to-end suite on a fresh Anvil chain, on every push (`.github/workflows/ci.yml`).
+GitHub Actions runs all of it on every push (`.github/workflows/ci.yml`).
 
 ## 3-minute demo script
 
-The dashboard is a one-screen **mission control**: mandate and allocation on the left, the live loop pipeline and Claude's decision in the centre, the activity timeline on the right. The **stage bar** at the bottom shows which act you are in (1 Program → 2 Decide → 3 Guard → 4 Reality → 5 Rebalance → Done) and highlights the next button to press. Judges without a wallet can open the live demo mandate read-only from the landing page.
-
-1. **Program (0:00):** connect wallet → set limits; the live preview shows what KRIYA would allocate before you sign. *Program mandate* walks through mint → approve → `openMandate` with a step checklist.
-2. **Decide (0:20):** *Preview decision* fills the decision card with Claude's allocation, rationale and per-strategy assessment. *Run loop* (or the CRE workflow) streams OBSERVE → VERIFY → DETECT → DECIDE → CONSTRAIN → EXECUTE into the pipeline as each step lands: **B 40 · A 35 · Reserve 25** onchain.
-3. **Guard (1:00):** *Guardrail test* submits an unsafe 60% allocation from the agent key; it **reverts onchain** with `ExposureExceeded`.
-4. **Reality (1:30):** *Spike B → 48*. The status badge flips to **⚠ AT RISK** (external signal) and the gauge shows the unverified reading.
-5. **Rebalance (2:00):** *Run loop* again (or CRE): VERIFY writes the risk onchain, DECIDE exits B, EXECUTE rebalances. The risk chart steps down from 21 to 14.
-6. **Done (2:30):** A 40 · C 35 · Reserve 25, risk 14/40, **✓ SAFE**. *Reset feed* replays the story.
+1. **Program (0:00):** connect a wallet on BSC testnet and set the limits. *Program mandate* mints test USDC, approves and calls `openMandate`.
+2. **Market (0:20):** *Market intelligence* shows live CoinMarketCap quotes and Fear & Greed, Atlas feeds, the onchain peg guard, and the risk score per strategy with every factor and its source.
+3. **Decide (0:45):** *Run loop* streams OBSERVE → VERIFY → DETECT → DECIDE → CONSTRAIN → EXECUTE. Claude allocates **B 40 · A 35 · Reserve 25** onchain, and the activity log shows the Atlas peg check the executor made inside that transaction.
+4. **Guard (1:15):** *Guardrail test* submits an unsafe 60% allocation from the agent key. It **reverts onchain** with `ExposureExceeded`.
+5. **Event risk (1:35):** enter a claim (e.g. "BNB below $500 before December 31, 2026", stress), *Find markets*, *Assess*. Cournot's probability, claim and verbatim evidence appear, and the LP strategy's risk rises.
+6. **Rebalance (2:15):** if the mandate is breached (or with *Spike B → 48* as a scenario override), *Run loop* writes the risk onchain, Claude exits B citing what Living Brain recalled, and the risk chart steps down from 21 to 14.
 
 ## Security model
 
-- The AI holds no keys and never controls funds. Its output is schema-constrained JSON, validated offchain, validated in CRE, and validated onchain.
-- The agent key can only call `executeAllocation`, which runs the same checks as CRE reports. Funds can only move between the vault and allowlisted strategies.
-- Only the configured Keystone forwarder can deliver reports. Workflow ID/owner checks can be enabled via `ReceiverTemplate` setters.
-- User override: pause the mandate (`setActive(false)`), `emergencyExit()`, and `withdraw()`. `emergencyExit()` also pauses the mandate, so the agent cannot redeploy capital the user just pulled out (the live Sepolia contracts predate this; the dashboard pauses before exiting there). Owner-level emergency pause: `KriyaExecutor.setPaused`.
-- The gas- and credit-spending API routes are rate limited across instances (Redis), so a public demo URL cannot drain the agent wallet.
-- Limits enforced: per-strategy exposure caps, per-strategy and portfolio risk caps, minimum liquidity reserve, drawdown floor vs high-water mark, strategy allowlist, auto-rebalance opt-in.
+- The AI holds no keys and never controls funds. Its output is schema-constrained JSON, validated by the policy engine and then by the executor contract.
+- The agent key can only call `executeAllocation`. Funds can only move between the vault and allowlisted strategies.
+- The Atlas peg guard stops capital from being deployed during a stablecoin depeg and refuses to act on a stale feed.
+- User override: pause the mandate, `emergencyExit()` (which also pauses the mandate, so the agent cannot redeploy the capital) and `withdraw()`. Owner emergency pause: `KriyaExecutor.setPaused`.
+- API keys stay server-side. Gas- and credit-spending API routes are rate limited.
 
-## Build timeline & originality
+## Business model and roadmap
 
-KRIYA was built from scratch during the Monad Metropolis Hackathon window: the first commit is 2026-10-06 and the full history is in this repository. The same codebase was also entered in TOKEN2049 Origins (Ethereum Sepolia). The Monad deployment, the Monad build of the app and the Monad documentation were added for Metropolis.
+- **Revenue:** a management fee on capital under mandate (0.25–0.5% a year), plus a B2B API that lets wallets and RWA issuers offer "mandates, not transactions" to their users.
+- **Next:** real BNB Chain venues for each strategy (lending markets, PancakeSwap LP, tokenized T-bill issuers), CoinMarketCap DEX data for LP pool depth, Atlas RWA/NAV feeds, a per-user vault factory, an audit, then mainnet.
 
-**BNB Bangkok (25–27 November 2026):** KRIYA existed before this hackathon. Built during the event (commit `12eb51c` and every commit after it in `git log`): BNB Chain testnet support (app, deploy script, CRE target), the Market Risk Engine (CoinMarketCap + Atlas + Cournot), Living Brain memory for the agent, the Market intelligence dashboard panel, and the tests for all of it.
+## Build timeline and originality
+
+KRIYA's core (mandate, vault, executor, Claude decision engine, dashboard) existed before this hackathon: the first commit is 2026-10-06, and it was previously entered at Monad Metropolis and TOKEN2049 Origins on other chains. The full history is in this repository.
+
+**Built during BNB Bangkok (25–27 November 2026),** from commit `12eb51c` onward: BNB Chain deployment and app support, the Market Risk Engine (CoinMarketCap + Atlas + Cournot), the onchain Atlas peg guard in KriyaExecutor, Living Brain memory for the agent, the Market intelligence panel, and the tests for all of it. The earlier chains and their tooling were removed so the project runs on BNB Chain only.
 
 ## AI disclosure
 
-This project was built with an AI coding assistant (Claude Code, Anthropic) for code generation, testing, debugging and documentation, under the author's direction and review. The product itself also uses an LLM at runtime: Claude (`claude-sonnet-5-5`, via the Anthropic API) proposes allocations, which are always re-validated by the policy engine, the CRE workflow and the executor contract.
+This project was built with an AI coding assistant (Claude Code, Anthropic) for code generation, testing, debugging and documentation, under the author's direction and review. The product also uses an LLM at runtime: Claude (via the Anthropic API) proposes allocations, which are always re-validated by the policy engine and the executor contract.
 
-## Third-party code & attribution
+## Third-party code and attribution
 
 | Component | Source | License |
 | --- | --- | --- |
-| `contracts/src/cre/ReceiverTemplate.sol`, `IReceiver.sol` | Adapted from Chainlink's CRE consumer-contract template ([docs](https://docs.chain.link/cre)) | MIT |
 | OpenZeppelin Contracts (`ERC20`, `Ownable`, `SafeERC20`, `ReentrancyGuard`) | [OpenZeppelin](https://github.com/OpenZeppelin/openzeppelin-contracts) | MIT |
 | forge-std | [Foundry](https://github.com/foundry-rs/forge-std) | MIT / Apache-2.0 |
-| `@chainlink/cre-sdk` | [Chainlink](https://www.npmjs.com/package/@chainlink/cre-sdk) | see package |
-| Next.js, React, viem, wagmi, TanStack Query, Tailwind CSS, zod | npm | MIT |
+| `@living-brain/sdk` | ChatAndBuild | see package |
 | `@anthropic-ai/sdk` | [Anthropic](https://github.com/anthropics/anthropic-sdk-typescript) | MIT |
-| pptxgenjs (deck generator) | npm | MIT |
+| Next.js, React, viem, wagmi, TanStack Query, Tailwind CSS, zod | npm | MIT |
+
+## Team
+
+Saurabh Nage · X [@saurabhnage624](https://x.com/saurabhnage624) · `TODO email / Telegram`
 
 ## License
 

@@ -101,7 +101,7 @@ export type JournalEntry = {
   user?: string;
   kind: "observe" | "decide" | "verify" | "constrain" | "execute" | "reject" | "reality" | "guardrail" | "run";
   runId?: string;
-  source?: "AGENT" | "CRE";
+  source?: "AGENT";
   title: string;
   detail?: string;
   txHash?: string;

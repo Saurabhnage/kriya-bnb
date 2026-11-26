@@ -124,7 +124,7 @@ function Landing({ onConnect }: { onConnect: () => void }) {
   const layers = [
     ["Intent", "You set the objective and hard limits"],
     ["Intelligence", "Claude proposes allocations"],
-    ["Verification", "Chainlink CRE verifies reality"],
+    ["Market truth", "CoinMarketCap, Atlas and Cournot score every strategy"],
     ["Enforcement", "Contracts revert anything outside the mandate"],
     ["Execution", "Capital moves onchain, auditable"],
   ];
@@ -137,8 +137,8 @@ function Landing({ onConnect }: { onConnect: () => void }) {
           Stop programming transactions. <span className="text-accent">Start programming financial objectives.</span>
         </h1>
         <p className="mt-4 max-w-2xl text-muted">
-          Tell KRIYA the outcome you want and the limits it must respect. An AI agent decides, Chainlink CRE verifies, and smart contracts revert
-          anything outside your mandate.
+          Tell KRIYA the outcome you want and the limits it must respect. Live CoinMarketCap, Atlas and Cournot data set the risk,
+          Claude decides with Living Brain memory, and BNB Chain contracts revert anything outside your mandate.
         </p>
         <div className="mt-8 flex flex-wrap gap-3">
           {DEMO_VIEW_ADDRESS && (

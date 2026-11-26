@@ -4,6 +4,23 @@ import { atlasFeeds } from "@/lib/server/market/atlas";
 import { latestAssessment, readCournotProofs } from "@/lib/server/market/cournot";
 import { memoryMode } from "@/lib/server/memory";
 import { fail, json } from "@/lib/server/http";
+import { publicClient } from "@/lib/server/chain";
+import { KriyaExecutorAbi } from "@/lib/generated/abis";
+import { deployment } from "@/lib/config";
+
+/** The executor's onchain Atlas peg guard, read live from BNB Chain (null when not configured). */
+async function readPegGuard() {
+  const e = { address: deployment.executor, abi: KriyaExecutorAbi } as const;
+  const [status, feed, maxDepegBps, maxFeedAge] = await Promise.all([
+    publicClient.readContract({ ...e, functionName: "pegStatus" }),
+    publicClient.readContract({ ...e, functionName: "pegFeed" }),
+    publicClient.readContract({ ...e, functionName: "maxDepegBps" }),
+    publicClient.readContract({ ...e, functionName: "maxFeedAge" }),
+  ]);
+  const [enabled, price, decimals, updatedAt, depegBps, stale, frozen] = status;
+  if (!enabled) return null;
+  return { feed, price: Number(price) / 10 ** decimals, updatedAt: Number(updatedAt) * 1000, depegBps, maxDepegBps, maxFeedAge, stale, frozen };
+}
 
 export const dynamic = "force-dynamic";
 
@@ -11,7 +28,13 @@ export const dynamic = "force-dynamic";
 // (CoinMarketCap call log, Atlas feed addresses, Cournot proofs). Secrets are never included.
 export async function GET() {
   try {
-    const [intel, cmcCalls, cournot, proofs] = await Promise.all([readIntel(), readCmcCalls(), latestAssessment(), readCournotProofs()]);
+    const [intel, cmcCalls, cournot, proofs, pegGuard] = await Promise.all([
+      readIntel(),
+      readCmcCalls(),
+      latestAssessment(),
+      readCournotProofs(),
+      readPegGuard().catch(() => null),
+    ]);
     return json({
       enabled: {
         market: marketEnabled(),
@@ -23,6 +46,7 @@ export async function GET() {
       },
       intel,
       cournot,
+      pegGuard,
       evidence: {
         cmcCalls: cmcCalls.slice(-10).reverse(),
         cournotProofs: proofs.slice(-5).reverse().map((p) => ({ id: p.id, endpoint: p.endpoint, status: p.status, requestId: p.requestId, ts: p.ts })),

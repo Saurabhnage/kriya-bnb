@@ -1,29 +1,34 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.26;
 
-import {ReceiverTemplate} from "./cre/ReceiverTemplate.sol";
+import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {KriyaMandate} from "./KriyaMandate.sol";
 import {KriyaVault} from "./KriyaVault.sol";
 import {KriyaStrategyRegistry} from "./KriyaStrategyRegistry.sol";
 
+/// @notice Read interface of an Atlas Oracle single-feed contract (AggregatorV3-compatible).
+interface IAtlasFeed {
+    function decimals() external view returns (uint8);
+    function latestRoundData()
+        external
+        view
+        returns (uint80 roundId, int256 answer, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound);
+}
+
 /// @title KriyaExecutor - the enforcement layer
-/// @notice AI proposes. Rules constrain. Verifiable infrastructure verifies. Smart contracts enforce.
+/// @notice AI proposes. Rules constrain. Market data verifies. Smart contracts enforce.
 ///
-///         Allocations arrive from two paths and pass the SAME onchain mandate check:
-///           1. Chainlink CRE reports delivered by the Keystone forwarder (`onReport`)
-///           2. The KRIYA agent key (`executeAllocation`), a bounded fallback path
-///         An allocation that violates the user's mandate reverts. The agent cannot move funds
-///         anywhere except between the vault and allowlisted strategies.
-contract KriyaExecutor is ReceiverTemplate {
-    uint8 public constant REPORT_RISK_UPDATE = 1;
-    uint8 public constant REPORT_ALLOCATION = 2;
+///         The KRIYA agent key (`executeAllocation`) is the only execution path, and every
+///         allocation passes the user's onchain mandate check: anything outside it reverts.
+///         The agent cannot move funds anywhere except between the vault and allowlisted strategies.
+///
+///         Atlas peg guard: when an Atlas Oracle feed for the settlement stablecoin is configured,
+///         every execution reads it onchain. If the stablecoin is off-peg by more than
+///         `maxDepegBps`, no position may grow (exits and reductions still go through), and a
+///         stale feed blocks execution entirely.
+contract KriyaExecutor is Ownable {
     uint16 public constant RESERVE_RISK = 2;
     uint16 public constant BPS = 10_000;
-
-    enum Source {
-        AGENT,
-        CRE
-    }
 
     KriyaMandate public immutable mandate;
     KriyaVault public immutable vault;
@@ -32,6 +37,10 @@ contract KriyaExecutor is ReceiverTemplate {
     address public agent;
     bool public paused;
     uint256 public executionCount;
+
+    IAtlasFeed public pegFeed;
+    uint16 public maxDepegBps;
+    uint32 public maxFeedAge;
 
     struct Health {
         uint256 totalValue;
@@ -46,7 +55,6 @@ contract KriyaExecutor is ReceiverTemplate {
     event AllocationExecuted(
         address indexed user,
         uint256 indexed executionId,
-        Source source,
         address[] strategies,
         uint16[] bps,
         uint16 reserveBps,
@@ -54,13 +62,16 @@ contract KriyaExecutor is ReceiverTemplate {
         uint256 totalValue,
         string rationale
     );
-    event RiskReportApplied(address[] strategies, uint16[] risks);
+    event PegGuardSet(address indexed feed, uint16 maxDepegBps, uint32 maxFeedAge);
+    event PegChecked(address indexed feed, int256 price, uint256 updatedAt, uint16 depegBps, bool deploymentsFrozen);
     event AgentSet(address agent);
     event PausedSet(bool paused);
 
     error NotAgent();
     error ProtocolPaused();
-    error UnknownReportType(uint8 kind);
+    error InvalidPegGuard();
+    error StalePegFeed(uint256 updatedAt, uint32 maxAge);
+    error DeploymentFrozenByPeg(address strategy, uint16 depegBps, uint16 maxDepegBps);
     error MandateInactive(address user);
     error AutoRebalanceDisabled(address user);
     error NothingToAllocate(address user);
@@ -74,8 +85,8 @@ contract KriyaExecutor is ReceiverTemplate {
     error PortfolioRiskExceeded(uint16 risk, uint16 maxRisk);
     error DrawdownExceeded(uint256 value, uint256 floor);
 
-    constructor(address forwarder, KriyaMandate _mandate, KriyaVault _vault, KriyaStrategyRegistry _registry, address _agent)
-        ReceiverTemplate(forwarder)
+    constructor(KriyaMandate _mandate, KriyaVault _vault, KriyaStrategyRegistry _registry, address _agent)
+        Ownable(msg.sender)
     {
         mandate = _mandate;
         vault = _vault;
@@ -91,7 +102,18 @@ contract KriyaExecutor is ReceiverTemplate {
         emit AgentSet(_agent);
     }
 
-    /// @notice Emergency pause: stops all executions from every path.
+    /// @notice Configure the Atlas peg guard. `feed == address(0)` disables it.
+    /// @param _maxDepegBps max distance from $1.00 before deployments freeze (e.g. 100 = 1%)
+    /// @param _maxFeedAge max seconds since the feed's last update before it counts as stale
+    function setPegGuard(address feed, uint16 _maxDepegBps, uint32 _maxFeedAge) external onlyOwner {
+        if (feed != address(0) && (_maxDepegBps == 0 || _maxDepegBps > 2_000 || _maxFeedAge == 0)) revert InvalidPegGuard();
+        pegFeed = IAtlasFeed(feed);
+        maxDepegBps = _maxDepegBps;
+        maxFeedAge = _maxFeedAge;
+        emit PegGuardSet(feed, _maxDepegBps, _maxFeedAge);
+    }
+
+    /// @notice Emergency pause: stops all executions.
     function setPaused(bool _paused) external onlyOwner {
         paused = _paused;
         emit PausedSet(_paused);
@@ -99,7 +121,7 @@ contract KriyaExecutor is ReceiverTemplate {
 
     // ------------------------------------------------------------------ entry points
 
-    /// @notice Agent path. Subject to exactly the same mandate validation as CRE reports.
+    /// @notice The only execution path. Validated against the user's mandate onchain.
     function executeAllocation(
         address user,
         address[] calldata strategies,
@@ -107,23 +129,43 @@ contract KriyaExecutor is ReceiverTemplate {
         string calldata rationale
     ) external {
         if (msg.sender != agent) revert NotAgent();
-        _execute(user, strategies, bps, rationale, Source.AGENT);
+        _execute(user, strategies, bps, rationale);
     }
 
-    /// @notice CRE path. Report = abi.encode(uint8 kind, bytes payload).
-    function _processReport(bytes calldata report) internal override {
-        (uint8 kind, bytes memory payload) = abi.decode(report, (uint8, bytes));
-        if (kind == REPORT_RISK_UPDATE) {
-            (address[] memory strategies, uint16[] memory risks) = abi.decode(payload, (address[], uint16[]));
-            registry.setRisks(strategies, risks);
-            emit RiskReportApplied(strategies, risks);
-        } else if (kind == REPORT_ALLOCATION) {
-            (address user, address[] memory strategies, uint16[] memory bps, string memory rationale) =
-                abi.decode(payload, (address, address[], uint16[], string));
-            _execute(user, strategies, bps, rationale, Source.CRE);
-        } else {
-            revert UnknownReportType(kind);
-        }
+    // ------------------------------------------------------------------ Atlas peg guard
+
+    /// @notice Current reading of the Atlas peg feed.
+    /// @return enabled whether a feed is configured
+    /// @return price raw feed answer
+    /// @return decimals feed decimals
+    /// @return updatedAt feed timestamp
+    /// @return depegBps distance from $1.00 in basis points
+    /// @return stale whether the feed is older than `maxFeedAge`
+    /// @return frozen whether new deployments are frozen (depeg above `maxDepegBps`)
+    function pegStatus()
+        public
+        view
+        returns (bool enabled, int256 price, uint8 decimals, uint256 updatedAt, uint16 depegBps, bool stale, bool frozen)
+    {
+        if (address(pegFeed) == address(0)) return (false, 0, 0, 0, 0, false, false);
+        enabled = true;
+        decimals = pegFeed.decimals();
+        (, price,, updatedAt,) = pegFeed.latestRoundData();
+        stale = updatedAt == 0 || updatedAt > block.timestamp || block.timestamp - updatedAt > maxFeedAge;
+        int256 one = int256(10 ** uint256(decimals));
+        uint256 diff = price >= one ? uint256(price - one) : uint256(one - price);
+        uint256 dBps = (diff * BPS) / uint256(one);
+        depegBps = dBps > type(uint16).max ? type(uint16).max : uint16(dBps);
+        frozen = depegBps > maxDepegBps;
+    }
+
+    /// @dev Reads the feed onchain, emits the reading as evidence, returns whether growth is frozen.
+    function _checkPeg() internal returns (bool frozen) {
+        (bool enabled, int256 price,, uint256 updatedAt, uint16 depegBps, bool stale, bool isFrozen) = pegStatus();
+        if (!enabled) return false;
+        if (stale) revert StalePegFeed(updatedAt, maxFeedAge);
+        emit PegChecked(address(pegFeed), price, updatedAt, depegBps, isFrozen);
+        return isFrozen;
     }
 
     // ------------------------------------------------------------------ validation
@@ -194,8 +236,7 @@ contract KriyaExecutor is ReceiverTemplate {
         address user,
         address[] memory strategies,
         uint16[] memory bps,
-        string memory rationale,
-        Source source
+        string memory rationale
     ) internal {
         if (paused) revert ProtocolPaused();
 
@@ -205,12 +246,13 @@ contract KriyaExecutor is ReceiverTemplate {
 
         (uint16 portfolioRisk, uint16 reserveBps) = validateAllocation(user, strategies, bps);
         _checkDrawdown(user, before.totalValue);
+        bool frozen = _checkPeg();
 
-        _rebalance(user, strategies, bps, before.totalValue);
+        _rebalance(user, strategies, bps, before.totalValue, frozen);
         vault.syncHighWaterMark(user);
 
         uint256 id = ++executionCount;
-        emit AllocationExecuted(user, id, source, strategies, bps, reserveBps, portfolioRisk, before.totalValue, rationale);
+        emit AllocationExecuted(user, id, strategies, bps, reserveBps, portfolioRisk, before.totalValue, rationale);
     }
 
     function _checkDrawdown(address user, uint256 value) internal view {
@@ -220,7 +262,10 @@ contract KriyaExecutor is ReceiverTemplate {
     }
 
     /// @dev Delta-based: first shrink over-weight positions into the reserve, then grow under-weight ones.
-    function _rebalance(address user, address[] memory strategies, uint16[] memory bps, uint256 total) internal {
+    ///      While the Atlas peg guard is frozen, growing any position reverts.
+    function _rebalance(address user, address[] memory strategies, uint16[] memory bps, uint256 total, bool frozen)
+        internal
+    {
         address[] memory list = registry.strategies();
         uint256[] memory targets = new uint256[](list.length);
         for (uint256 i = 0; i < list.length; i++) {
@@ -237,7 +282,14 @@ contract KriyaExecutor is ReceiverTemplate {
         }
         for (uint256 i = 0; i < list.length; i++) {
             uint256 pos = vault.positionOf(user, list[i]);
-            if (pos < targets[i]) vault.moveToStrategy(user, list[i], targets[i] - pos);
+            if (pos < targets[i]) {
+                if (frozen) revert DeploymentFrozenByPeg(list[i], _depegBps(), maxDepegBps);
+                vault.moveToStrategy(user, list[i], targets[i] - pos);
+            }
         }
+    }
+
+    function _depegBps() internal view returns (uint16 d) {
+        (,,,, d,,) = pegStatus();
     }
 }

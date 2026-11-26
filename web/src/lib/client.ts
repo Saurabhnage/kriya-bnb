@@ -52,7 +52,7 @@ export type StateResponse = {
     detail?: string;
     txHash?: string;
     onchain: boolean;
-    source?: "CRE" | "AGENT";
+    source?: "AGENT";
     runId?: string;
   }[];
   riskHistory: RiskPoint[];
@@ -69,12 +69,12 @@ export type RiskPoint = {
   up?: boolean;
   label: string;
   txHash?: string;
-  source?: "AGENT" | "CRE";
+  source?: "AGENT";
 };
 
-export type RunView = { runId: string; source: "AGENT" | "CRE"; ts: number; steps: LoopStep[] };
+export type RunView = { runId: string; source: "AGENT"; ts: number; steps: LoopStep[] };
 
-export type Decision = Omit<ProposalResponse, "user"> & { ts: number; source: "AGENT" | "CRE" };
+export type Decision = Omit<ProposalResponse, "user"> & { ts: number; source: "AGENT" };
 
 export type ProposalResponse = {
   user: string;
@@ -108,6 +108,7 @@ export type MarketResponse = {
     errors: string[];
   } | null;
   cournot: { claim: string; direction: "stress" | "relief"; probability: number; marketIds: string[]; result: unknown; basis: unknown; requestId: string | null; proofId: string; at: number } | null;
+  pegGuard: { feed: string; price: number; updatedAt: number; depegBps: number; maxDepegBps: number; maxFeedAge: number; stale: boolean; frozen: boolean } | null;
   evidence: {
     cmcCalls: { ts: number; endpoint: string; http: number; credits?: number }[];
     cournotProofs: { id: string; endpoint: string; status: number; requestId: string | null; ts: number }[];

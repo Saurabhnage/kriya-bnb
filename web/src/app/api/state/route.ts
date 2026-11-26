@@ -36,7 +36,7 @@ export async function GET(request: Request) {
     const feed = await getRiskFeed();
     const { items: activity, riskHistory, journal } = await readActivity(user, snap.strategies, snap.block);
 
-    // What the mandate looks like against the latest *external* risk view (before CRE writes it onchain)
+    // What the mandate looks like against the latest *external* risk view (before the keeper writes it onchain)
     const pending = snap.mandate.exists
       ? evaluateHealth(snap.mandate.params, snap.mandate.allowed, withRisks(snap.strategies, feed.risks), snap.positions, snap.idle)
       : null;
@@ -62,7 +62,7 @@ export async function GET(request: Request) {
     });
 
     const latestDecision = toDecision([...journal].reverse().find((j) => j.kind === "decide" && j.data));
-    const lastRun = buildLastRun(journal, riskHistory);
+    const lastRun = buildLastRun(journal);
 
     return json({ snapshot: snap, feed, pending, activity, riskHistory, lastRun, latestDecision, act });
   } catch (err) {
