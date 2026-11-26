@@ -13,16 +13,21 @@ import {KriyaExecutor} from "../src/KriyaExecutor.sol";
 /// @notice Deploys the full KRIYA protocol plus the controlled demo strategy universe.
 /// Env:
 ///   PRIVATE_KEY      deployer / protocol owner
-///   AGENT_ADDRESS        KRIYA agent signer (the only execution path)
+///   AGENT_ADDRESS        KRIYA agent signer (fallback execution path)
+///   CRE_FORWARDER        Chainlink forwarder (defaults on BSC testnet to the MockKeystoneForwarder used by
+///                        `cre workflow simulate --broadcast`; elsewhere to the deployer)
 ///   ATLAS_PEG_FEED       optional Atlas Oracle stablecoin/USD feed for the executor's onchain peg guard
 ///   PEG_MAX_DEPEG_BPS    optional, default 100 (1%)
 ///   PEG_MAX_FEED_AGE     optional, seconds, default 86400
 contract Deploy is Script {
+    /// CRE simulation forwarder for BNB Chain testnet (chain-name `binance_smart_chain-testnet`).
+    address constant BSC_TESTNET_MOCK_FORWARDER = 0xA238e42cb8782808DBb2F37E19859244ec4779B0;
 
     function run() external {
         uint256 pk = vm.envUint("PRIVATE_KEY");
         address deployer = vm.addr(pk);
         address agent = vm.envOr("AGENT_ADDRESS", deployer);
+        address forwarder = vm.envOr("CRE_FORWARDER", block.chainid == 97 ? BSC_TESTNET_MOCK_FORWARDER : deployer);
         address pegFeed = vm.envOr("ATLAS_PEG_FEED", address(0));
         uint16 maxDepegBps = uint16(vm.envOr("PEG_MAX_DEPEG_BPS", uint256(100)));
         uint32 maxFeedAge = uint32(vm.envOr("PEG_MAX_FEED_AGE", uint256(86_400)));
@@ -33,10 +38,11 @@ contract Deploy is Script {
         KriyaStrategyRegistry registry = new KriyaStrategyRegistry();
         KriyaMandate mandate = new KriyaMandate();
         KriyaVault vault = new KriyaVault(IERC20(address(usdc)), mandate, registry);
-        KriyaExecutor executor = new KriyaExecutor(mandate, vault, registry, agent);
+        KriyaExecutor executor = new KriyaExecutor(forwarder, mandate, vault, registry, agent);
 
         mandate.setVault(address(vault));
         vault.setExecutor(address(executor));
+        registry.setUpdater(address(executor), true);
         if (pegFeed != address(0)) executor.setPegGuard(pegFeed, maxDepegBps, maxFeedAge);
 
         address a = address(new MockStrategy(IERC20(address(usdc)), address(vault), "Strategy A"));
@@ -56,6 +62,7 @@ contract Deploy is Script {
         vm.serializeAddress(o, "mandate", address(mandate));
         vm.serializeAddress(o, "vault", address(vault));
         vm.serializeAddress(o, "executor", address(executor));
+        vm.serializeAddress(o, "forwarder", forwarder);
         vm.serializeAddress(o, "pegFeed", pegFeed);
         vm.serializeAddress(o, "agent", agent);
         vm.serializeAddress(o, "strategyA", a);

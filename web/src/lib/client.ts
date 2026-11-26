@@ -52,7 +52,7 @@ export type StateResponse = {
     detail?: string;
     txHash?: string;
     onchain: boolean;
-    source?: "AGENT";
+    source?: "AGENT" | "CRE";
     runId?: string;
   }[];
   riskHistory: RiskPoint[];
@@ -69,12 +69,12 @@ export type RiskPoint = {
   up?: boolean;
   label: string;
   txHash?: string;
-  source?: "AGENT";
+  source?: "AGENT" | "CRE";
 };
 
-export type RunView = { runId: string; source: "AGENT"; ts: number; steps: LoopStep[] };
+export type RunView = { runId: string; source: "AGENT" | "CRE"; ts: number; steps: LoopStep[] };
 
-export type Decision = Omit<ProposalResponse, "user"> & { ts: number; source: "AGENT" };
+export type Decision = Omit<ProposalResponse, "user"> & { ts: number; source: "AGENT" | "CRE" };
 
 export type ProposalResponse = {
   user: string;

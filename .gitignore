@@ -8,3 +8,7 @@ contracts/broadcast/*/31337/
 .next/
 .data/
 contracts/.env
+cre/**/node_modules/
+cre/.env
+*.wasm
+.cre_build_tmp.js

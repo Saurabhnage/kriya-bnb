@@ -3,7 +3,7 @@
 //   CoinMarketCap  → BNB volatility, Fear & Greed regime, stablecoin prices
 //   Atlas Oracle   → onchain stablecoin + BNB prices (preferred over CMC; cross-checked against it)
 //   Cournot        → probability of a market-stress event, as a forward-looking risk premium
-// The output replaces the demo risk feed, is written onchain by the keeper, and
+// The output replaces the demo risk feed, is verified onchain by Chainlink CRE (or the keeper), and
 // drives the mandate check that triggers rebalances. Same inputs → same scores on every node.
 
 export type StrategyKind = "lending" | "lp" | "tbill" | "other";

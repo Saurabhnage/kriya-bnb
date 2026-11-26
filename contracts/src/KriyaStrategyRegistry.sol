@@ -5,7 +5,7 @@ import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 
 /// @title KriyaStrategyRegistry - the allowlisted strategy universe and its verified risk scores
 /// @notice Risk scores (0-100) are written only by authorized updaters: the KriyaExecutor
-///         and the protocol owner, whose keeper writes market-verified scores.
+///         (relaying Chainlink CRE-verified reports) and, as a fallback, the protocol owner.
 contract KriyaStrategyRegistry is Ownable {
     struct Strategy {
         string name;

@@ -63,6 +63,11 @@ function Row({ item, now, sub }: { item: Item; now: number; sub?: boolean }) {
       <div className="min-w-0 flex-1 text-xs">
         <p className="leading-snug text-ink">
           {item.title}
+          {item.source && (
+            <span className={`ml-1.5 rounded px-1 py-px font-mono text-[9px] ${item.source === "CRE" ? "bg-accent-2/15 text-accent-2" : "bg-line text-muted"}`}>
+              {item.source === "CRE" ? "CRE" : "AGENT"}
+            </span>
+          )}
         </p>
         {item.detail && !sub && <p className="mt-0.5 line-clamp-2 break-words text-[11px] text-muted">{item.detail}</p>}
         <p className="mt-0.5 font-mono text-[10px] text-muted">

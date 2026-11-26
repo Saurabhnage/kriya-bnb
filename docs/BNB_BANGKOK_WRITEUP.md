@@ -12,7 +12,7 @@ DeFi and RWA holders are asked to manage transactions, but what they actually ha
 The user programs a **mandate** onchain (objective plus hard limits). Each run of the loop works like this:
 
 1. The **KRIYA Market Risk Engine** turns live CoinMarketCap and Atlas data (and Cournot event odds) into a risk score for every strategy, including a tokenized T-bill (RWA) vault.
-2. The keeper writes those scores **onchain on BNB Chain**.
+2. Chainlink CRE (or the keeper) verifies those scores **onchain on BNB Chain**.
 3. Claude proposes an allocation, with memory of past regimes from Living Brain.
 4. **KriyaExecutor** enforces the mandate onchain (anything outside the limits reverts) and reads the **Atlas** stablecoin feed inside every execution: during a depeg, no position may grow.
 
@@ -37,7 +37,7 @@ The user programs a **mandate** onchain (objective plus hard limits). Each run o
 
 ## Safety
 
-- The AI holds no keys and never controls funds. Its output is schema-checked by the policy engine, then by the contract.
+- The AI holds no keys and never controls funds. Its output is schema-checked by the policy engine, then by CRE, then by the contract.
 - The risk model is deterministic and unit-tested: the same inputs always give the same scores.
 - The Atlas peg guard refuses to deploy capital during a stablecoin depeg or on a stale feed.
 - Rate limits protect gas and API credits. Users can pause the mandate or trigger an emergency exit at any time.

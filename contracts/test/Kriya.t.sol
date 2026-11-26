@@ -11,6 +11,7 @@ import {KriyaVault} from "../src/KriyaVault.sol";
 import {KriyaExecutor} from "../src/KriyaExecutor.sol";
 import {MockAggregatorV3} from "../src/mocks/MockAggregatorV3.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import {ReceiverTemplate} from "../src/cre/ReceiverTemplate.sol";
 
 contract KriyaTest is Test {
     MockUSDC usdc;
@@ -22,6 +23,7 @@ contract KriyaTest is Test {
     address stratB;
     address stratC;
 
+    address forwarder = makeAddr("forwarder");
     address agent = makeAddr("agent");
     address user = makeAddr("user");
 
@@ -32,9 +34,10 @@ contract KriyaTest is Test {
         registry = new KriyaStrategyRegistry();
         mandate = new KriyaMandate();
         vault = new KriyaVault(IERC20(address(usdc)), mandate, registry);
-        executor = new KriyaExecutor(mandate, vault, registry, agent);
+        executor = new KriyaExecutor(forwarder, mandate, vault, registry, agent);
         mandate.setVault(address(vault));
         vault.setExecutor(address(executor));
+        registry.setUpdater(address(executor), true);
 
         stratA = address(new MockStrategy(IERC20(address(usdc)), address(vault), "Strategy A"));
         stratB = address(new MockStrategy(IERC20(address(usdc)), address(vault), "Strategy B"));
@@ -84,6 +87,11 @@ contract KriyaTest is Test {
         (address[] memory s, uint16[] memory w) = _alloc(stratA, 3500, stratB, 4000);
         vm.prank(agent);
         executor.executeAllocation(user, s, w, "initial");
+    }
+
+    function _report(uint8 kind, bytes memory payload) internal {
+        vm.prank(forwarder);
+        executor.onReport("", abi.encode(kind, payload));
     }
 
     function _setRisk(address strategy, uint16 risk) internal {
@@ -241,6 +249,62 @@ contract KriyaTest is Test {
         (address[] memory a, uint16[] memory w) = _alloc(stratA, 3500, stratB, 4000);
         vm.expectRevert(KriyaExecutor.NotAgent.selector);
         executor.executeAllocation(user, a, w, "spoof");
+    }
+
+    // ------------------------------------------------------------------ CRE path
+
+    function test_CreRiskReportThenRebalanceRestoresMandate() public {
+        _initialAllocation();
+
+        // CRE verifies the external risk change and writes it onchain
+        address[] memory s = new address[](1);
+        uint16[] memory r = new uint16[](1);
+        (s[0], r[0]) = (stratB, 48);
+        _report(1, abi.encode(s, r));
+        assertEq(registry.riskOf(stratB), 48);
+        assertTrue(executor.mandateHealth(user).violated, "mandate should be at risk");
+
+        // CRE delivers the verified rebalance
+        (address[] memory a, uint16[] memory w) = _alloc(stratA, 4000, stratC, 3500);
+        _report(2, abi.encode(user, a, w, "exit B: risk 34 -> 48 exceeds mandate max 40"));
+
+        assertEq(vault.positionOf(user, stratB), 0);
+        assertEq(vault.positionOf(user, stratA), 400e6);
+        assertEq(vault.positionOf(user, stratC), 350e6);
+        assertEq(vault.idleOf(user), 250e6);
+        assertEq(usdc.balanceOf(stratB), 0);
+
+        KriyaExecutor.Health memory h = executor.mandateHealth(user);
+        assertFalse(h.violated);
+        assertEq(h.portfolioRisk, 14); // (40*21 + 35*15 + 25*2) / 100 = 14.15
+        assertEq(executor.executionCount(), 2);
+    }
+
+    function test_CreAllocationIsStillMandateChecked() public {
+        (address[] memory a, uint16[] memory w) = _alloc(stratA, 3500, stratB, 5000);
+        vm.prank(forwarder);
+        vm.expectRevert(abi.encodeWithSelector(KriyaExecutor.ExposureExceeded.selector, stratB, 5000, 4000));
+        executor.onReport("", abi.encode(uint8(2), abi.encode(user, a, w, "bad")));
+    }
+
+    function test_CreAllocationIsStillPegGuarded() public {
+        _pegFeed(0.97e8);
+        (address[] memory a, uint16[] memory w) = _alloc(stratA, 3500, stratB, 4000);
+        vm.prank(forwarder);
+        vm.expectRevert(abi.encodeWithSelector(KriyaExecutor.DeploymentFrozenByPeg.selector, stratA, 300, 100));
+        executor.onReport("", abi.encode(uint8(2), abi.encode(user, a, w, "deploy during depeg")));
+    }
+
+    function test_RevertWhen_ReportNotFromForwarder() public {
+        (address[] memory a, uint16[] memory w) = _alloc(stratA, 3500, stratB, 4000);
+        vm.expectRevert(abi.encodeWithSelector(ReceiverTemplate.InvalidSender.selector, address(this), forwarder));
+        executor.onReport("", abi.encode(uint8(2), abi.encode(user, a, w, "spoof")));
+    }
+
+    function test_RevertWhen_UnknownReportType() public {
+        vm.prank(forwarder);
+        vm.expectRevert(abi.encodeWithSelector(KriyaExecutor.UnknownReportType.selector, 9));
+        executor.onReport("", abi.encode(uint8(9), bytes("")));
     }
 
     // ------------------------------------------------------------------ Atlas peg guard

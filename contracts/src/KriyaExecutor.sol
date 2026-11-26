@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.26;
 
-import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import {ReceiverTemplate} from "./cre/ReceiverTemplate.sol";
 import {KriyaMandate} from "./KriyaMandate.sol";
 import {KriyaVault} from "./KriyaVault.sol";
 import {KriyaStrategyRegistry} from "./KriyaStrategyRegistry.sol";
@@ -16,19 +16,28 @@ interface IAtlasFeed {
 }
 
 /// @title KriyaExecutor - the enforcement layer
-/// @notice AI proposes. Rules constrain. Market data verifies. Smart contracts enforce.
+/// @notice AI proposes. Rules constrain. Verifiable infrastructure verifies. Smart contracts enforce.
 ///
-///         The KRIYA agent key (`executeAllocation`) is the only execution path, and every
-///         allocation passes the user's onchain mandate check: anything outside it reverts.
-///         The agent cannot move funds anywhere except between the vault and allowlisted strategies.
+///         Allocations arrive from two paths and pass the SAME onchain mandate check:
+///           1. Chainlink CRE reports delivered by the Keystone forwarder (`onReport`)
+///           2. The KRIYA agent key (`executeAllocation`), a bounded fallback path
+///         An allocation that violates the user's mandate reverts. The agent cannot move funds
+///         anywhere except between the vault and allowlisted strategies.
 ///
 ///         Atlas peg guard: when an Atlas Oracle feed for the settlement stablecoin is configured,
 ///         every execution reads it onchain. If the stablecoin is off-peg by more than
 ///         `maxDepegBps`, no position may grow (exits and reductions still go through), and a
 ///         stale feed blocks execution entirely.
-contract KriyaExecutor is Ownable {
+contract KriyaExecutor is ReceiverTemplate {
+    uint8 public constant REPORT_RISK_UPDATE = 1;
+    uint8 public constant REPORT_ALLOCATION = 2;
     uint16 public constant RESERVE_RISK = 2;
     uint16 public constant BPS = 10_000;
+
+    enum Source {
+        AGENT,
+        CRE
+    }
 
     KriyaMandate public immutable mandate;
     KriyaVault public immutable vault;
@@ -55,6 +64,7 @@ contract KriyaExecutor is Ownable {
     event AllocationExecuted(
         address indexed user,
         uint256 indexed executionId,
+        Source source,
         address[] strategies,
         uint16[] bps,
         uint16 reserveBps,
@@ -62,6 +72,7 @@ contract KriyaExecutor is Ownable {
         uint256 totalValue,
         string rationale
     );
+    event RiskReportApplied(address[] strategies, uint16[] risks);
     event PegGuardSet(address indexed feed, uint16 maxDepegBps, uint32 maxFeedAge);
     event PegChecked(address indexed feed, int256 price, uint256 updatedAt, uint16 depegBps, bool deploymentsFrozen);
     event AgentSet(address agent);
@@ -69,6 +80,7 @@ contract KriyaExecutor is Ownable {
 
     error NotAgent();
     error ProtocolPaused();
+    error UnknownReportType(uint8 kind);
     error InvalidPegGuard();
     error StalePegFeed(uint256 updatedAt, uint32 maxAge);
     error DeploymentFrozenByPeg(address strategy, uint16 depegBps, uint16 maxDepegBps);
@@ -85,8 +97,8 @@ contract KriyaExecutor is Ownable {
     error PortfolioRiskExceeded(uint16 risk, uint16 maxRisk);
     error DrawdownExceeded(uint256 value, uint256 floor);
 
-    constructor(KriyaMandate _mandate, KriyaVault _vault, KriyaStrategyRegistry _registry, address _agent)
-        Ownable(msg.sender)
+    constructor(address forwarder, KriyaMandate _mandate, KriyaVault _vault, KriyaStrategyRegistry _registry, address _agent)
+        ReceiverTemplate(forwarder)
     {
         mandate = _mandate;
         vault = _vault;
@@ -113,7 +125,7 @@ contract KriyaExecutor is Ownable {
         emit PegGuardSet(feed, _maxDepegBps, _maxFeedAge);
     }
 
-    /// @notice Emergency pause: stops all executions.
+    /// @notice Emergency pause: stops all executions from every path.
     function setPaused(bool _paused) external onlyOwner {
         paused = _paused;
         emit PausedSet(_paused);
@@ -121,7 +133,7 @@ contract KriyaExecutor is Ownable {
 
     // ------------------------------------------------------------------ entry points
 
-    /// @notice The only execution path. Validated against the user's mandate onchain.
+    /// @notice Agent path. Subject to exactly the same mandate validation (and peg guard) as CRE reports.
     function executeAllocation(
         address user,
         address[] calldata strategies,
@@ -129,7 +141,23 @@ contract KriyaExecutor is Ownable {
         string calldata rationale
     ) external {
         if (msg.sender != agent) revert NotAgent();
-        _execute(user, strategies, bps, rationale);
+        _execute(user, strategies, bps, rationale, Source.AGENT);
+    }
+
+    /// @notice CRE path. Report = abi.encode(uint8 kind, bytes payload).
+    function _processReport(bytes calldata report) internal override {
+        (uint8 kind, bytes memory payload) = abi.decode(report, (uint8, bytes));
+        if (kind == REPORT_RISK_UPDATE) {
+            (address[] memory strategies, uint16[] memory risks) = abi.decode(payload, (address[], uint16[]));
+            registry.setRisks(strategies, risks);
+            emit RiskReportApplied(strategies, risks);
+        } else if (kind == REPORT_ALLOCATION) {
+            (address user, address[] memory strategies, uint16[] memory bps, string memory rationale) =
+                abi.decode(payload, (address, address[], uint16[], string));
+            _execute(user, strategies, bps, rationale, Source.CRE);
+        } else {
+            revert UnknownReportType(kind);
+        }
     }
 
     // ------------------------------------------------------------------ Atlas peg guard
@@ -236,7 +264,8 @@ contract KriyaExecutor is Ownable {
         address user,
         address[] memory strategies,
         uint16[] memory bps,
-        string memory rationale
+        string memory rationale,
+        Source source
     ) internal {
         if (paused) revert ProtocolPaused();
 
@@ -252,7 +281,7 @@ contract KriyaExecutor is Ownable {
         vault.syncHighWaterMark(user);
 
         uint256 id = ++executionCount;
-        emit AllocationExecuted(user, id, strategies, bps, reserveBps, portfolioRisk, before.totalValue, rationale);
+        emit AllocationExecuted(user, id, source, strategies, bps, reserveBps, portfolioRisk, before.totalValue, rationale);
     }
 
     function _checkDrawdown(address user, uint256 value) internal view {

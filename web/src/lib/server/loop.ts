@@ -88,7 +88,7 @@ export async function executeViaAgent(user: Address, proposal: Proposal): Promis
   return hash;
 }
 
-export type RunContext = { runId?: string; source?: "AGENT" };
+export type RunContext = { runId?: string; source?: "AGENT" | "CRE" };
 
 export async function journalProposal(user: Address, p: Proposal, strategies: StrategyView[], ctx: RunContext = {}) {
   const mix = [...p.allocation.map((a) => `${name(strategies, a.strategy)} ${a.bps / 100}%`)];
@@ -132,8 +132,8 @@ export async function journalProposal(user: Address, p: Proposal, strategies: St
 export type { LoopStep } from "../client";
 
 /**
- * The KRIYA keeper: Observe (market risk engine) → Verify (write scores onchain) → Detect → Decide
- * (Claude + Living Brain) → Constrain (policy engine) → Execute (KriyaExecutor enforces the mandate).
+ * Local keeper: the same Observe → Verify → Decide → Constrain → Execute loop as the Chainlink CRE
+ * workflow, run from this server with the protocol keys. Used when CRE is not available.
  */
 export async function runKeeper(only?: Address, onStep?: (step: LoopStep) => void): Promise<LoopStep[]> {
   const runId = `run-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;

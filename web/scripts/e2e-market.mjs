@@ -9,7 +9,7 @@
 //   3. node scripts/e2e-market.mjs
 import assert from "node:assert/strict";
 import { readFileSync, writeFileSync } from "node:fs";
-import { createPublicClient, createWalletClient, http, parseAbi, parseUnits } from "viem";
+import { createPublicClient, createWalletClient, encodeAbiParameters, http, parseAbi, parseAbiParameters, parseUnits } from "viem";
 import { mnemonicToAccount } from "viem/accounts";
 import { foundry } from "viem/chains";
 
@@ -158,6 +158,24 @@ await step("Atlas depeg freezes new deployments onchain, recovery unfreezes them
   await send(feed, feedAbi, "setAnswer", [100_020_000n]);
   ({ data } = await api("/api/market"));
   assert.equal(data.pegGuard.frozen, false);
+});
+
+await step("Chainlink CRE path: a forwarder-signed risk report lands onchain and is attributed to CRE", async () => {
+  // e2e-market-local.sh deploys with the forwarder = Anvil account 0 (stands in for the Keystone forwarder)
+  const forwarder = createWalletClient({ account: mnemonicToAccount("test test test test test test test test test test test junk", { addressIndex: 0 }), chain: foundry, transport: http(RPC) });
+  const execAbi = parseAbi(["function onReport(bytes metadata, bytes report)"]);
+  const before = await onchainRisk(dep.strategyC);
+  const report = (risk) =>
+    encodeAbiParameters(parseAbiParameters("uint8 kind, bytes payload"), [1, encodeAbiParameters(parseAbiParameters("address[] s, uint16[] r"), [[dep.strategyC], [risk]])]);
+  let r = await pub.waitForTransactionReceipt({ hash: await forwarder.writeContract({ address: dep.executor, abi: execAbi, functionName: "onReport", args: ["0x", report(before + 1)] }) });
+  assert.equal(r.status, "success");
+  assert.equal(await onchainRisk(dep.strategyC), before + 1);
+  const st = (await api(`/api/state?user=${user.address}`)).data;
+  assert.ok(st.activity.some((a) => a.source === "CRE" && a.detail === "Written by Chainlink CRE report"), "CRE attribution");
+  // a report from anyone else is rejected by the receiver
+  await assert.rejects(wallet.writeContract({ address: dep.executor, abi: execAbi, functionName: "onReport", args: ["0x", report(99)] }));
+  r = await pub.waitForTransactionReceipt({ hash: await forwarder.writeContract({ address: dep.executor, abi: execAbi, functionName: "onReport", args: ["0x", report(before)] }) });
+  assert.equal(r.status, "success");
 });
 
 setMode("calm");

@@ -112,6 +112,7 @@ export type ActivityItem = {
   detail?: string;
   txHash?: string;
   onchain: boolean;
+  source?: "CRE" | "AGENT";
 };
 
 const EVENTS = {
@@ -121,7 +122,7 @@ const EVENTS = {
   mandateStatus: parseAbiItem("event MandateStatusChanged(address indexed user, bool active)"),
   risk: parseAbiItem("event RiskUpdated(address indexed strategy, uint16 oldRisk, uint16 newRisk, address indexed updater)"),
   executed: parseAbiItem(
-    "event AllocationExecuted(address indexed user, uint256 indexed executionId, address[] strategies, uint16[] bps, uint16 reserveBps, uint16 portfolioRisk, uint256 totalValue, string rationale)",
+    "event AllocationExecuted(address indexed user, uint256 indexed executionId, uint8 source, address[] strategies, uint16[] bps, uint16 reserveBps, uint16 portfolioRisk, uint256 totalValue, string rationale)",
   ),
   peg: parseAbiItem("event PegChecked(address indexed feed, int256 price, uint256 updatedAt, uint16 depegBps, bool deploymentsFrozen)"),
 };
@@ -168,11 +169,14 @@ export async function readActivity(user: Address, strategies: StrategyView[], la
   const peg = execTxs.size ? ((await get(deployment.executor, EVENTS.peg)) as Log[]).filter((l) => execTxs.has(l.transactionHash)) : [];
 
   type AnyLog = Log & { args: Record<string, unknown> };
+  // a risk score written through the executor came from a Chainlink CRE report
+  const viaCre = (l: AnyLog) => (l.args.updater as string).toLowerCase() === deployment.executor.toLowerCase();
   const items: {
     log: AnyLog;
     kind: string;
     title: string;
     detail?: string;
+    source?: "CRE" | "AGENT";
     point?: Omit<RiskPoint, "ts" | "txHash" | "order">;
   }[] = [];
   for (const l of dep as AnyLog[]) items.push({ log: l, kind: "deposit", title: `Deposited ${fmtUsdc(l.args.amount as bigint)} USDC` });
@@ -187,25 +191,28 @@ export async function readActivity(user: Address, strategies: StrategyView[], la
       log: l,
       kind: up ? "risk-up" : "risk-down",
       title: `Verified risk ${up ? "increase" : "change"}: ${name(l.args.strategy as string)} ${l.args.oldRisk} → ${l.args.newRisk}`,
-      detail: "Written onchain by the KRIYA keeper from the Market Risk Engine (CoinMarketCap + Atlas + Cournot)",
+      detail: viaCre(l) ? "Written by Chainlink CRE report" : "Written by the KRIYA keeper from the Market Risk Engine",
+      source: viaCre(l) ? "CRE" : "AGENT",
       point: {
         portfolioRisk: null,
         kind: "risk-change",
         up: (l.args.newRisk as number) > (l.args.oldRisk as number),
         label: `${name(l.args.strategy as string).split(" - ")[0]} ${l.args.oldRisk} → ${l.args.newRisk}`,
+        source: viaCre(l) ? "CRE" : "AGENT",
       },
     });
   }
   for (const l of exec as AnyLog[]) {
-    const a = l.args as { executionId: bigint; strategies: string[]; bps: number[]; reserveBps: number; portfolioRisk: number; rationale: string };
+    const a = l.args as { executionId: bigint; source: number; strategies: string[]; bps: number[]; reserveBps: number; portfolioRisk: number; rationale: string };
     const parts = a.strategies.map((s, i) => `${name(s).split(" - ")[0]} ${a.bps[i] / 100}%`);
     parts.push(`Reserve ${a.reserveBps / 100}%`);
     items.push({
       log: l,
       kind: "execute",
-      title: `Allocation #${a.executionId} executed by the KRIYA agent · risk ${a.portfolioRisk}`,
+      title: `Allocation #${a.executionId} executed via ${a.source === 1 ? "Chainlink CRE" : "KRIYA agent"} · risk ${a.portfolioRisk}`,
       detail: `${parts.join(" · ")}${a.rationale ? ` — ${a.rationale}` : ""}`,
-      point: { portfolioRisk: a.portfolioRisk, kind: "execution", label: `Allocation #${a.executionId}` },
+      source: a.source === 1 ? "CRE" : "AGENT",
+      point: { portfolioRisk: a.portfolioRisk, kind: "execution", label: `Allocation #${a.executionId}`, source: a.source === 1 ? "CRE" : "AGENT" },
     });
   }
   const pegDecimals = peg.length
@@ -234,6 +241,7 @@ export async function readActivity(user: Address, strategies: StrategyView[], la
     detail: i.detail,
     txHash: i.log.transactionHash ?? undefined,
     onchain: true,
+    source: i.source,
   }));
   const riskHistory: RiskPoint[] = items
     .filter((i) => i.point)

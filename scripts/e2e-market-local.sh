@@ -2,7 +2,8 @@
 # Runs web/scripts/e2e-market.mjs end to end on a fresh local Anvil chain, with no API keys:
 # CoinMarketCap and Cournot are served by web/scripts/market-fixtures.mjs, and two Atlas-style
 # AggregatorV3 feeds (USDT/USD, BNB/USD) are deployed from contracts/src/mocks/MockAggregatorV3.sol, and the
-# executor's onchain peg guard reads the USDT/USD one.
+# executor's onchain peg guard reads the USDT/USD one. Anvil account 0 deploys and also stands in for
+# the Chainlink CRE forwarder.
 # Needs: foundry (anvil, forge, cast) and node. Run from the repo root: ./scripts/e2e-market-local.sh
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -10,7 +11,9 @@ WORK="$(mktemp -d)"
 RPC=http://127.0.0.1:8545
 MNEMONIC="test test test test test test test test test test test junk"
 PIDS=()
-cleanup() { for p in "${PIDS[@]}"; do kill "$p" 2>/dev/null || true; done; }
+# stop each background process with all its children (npx → node → next-server)
+killtree() { for c in $(pgrep -P "$1" 2>/dev/null); do killtree "$c"; done; kill "$1" 2>/dev/null || true; }
+cleanup() { for p in "${PIDS[@]}"; do killtree "$p"; done; }
 trap cleanup EXIT
 
 anvil --silent & PIDS+=($!)

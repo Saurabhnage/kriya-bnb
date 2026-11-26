@@ -38,7 +38,7 @@ export function LoopPipeline({ live, running, lastRun }: { live: LoopStep[] | nu
   ) : lastRun ? (
     <span className="font-mono text-xs text-muted">
       last run {relTime(lastRun.ts, now)} ·{" "}
-      <span className="text-muted">KRIYA keeper</span>
+      <span className={lastRun.source === "CRE" ? "text-accent-2" : "text-muted"}>{lastRun.source === "CRE" ? "Chainlink CRE" : "KRIYA keeper"}</span>
     </span>
   ) : (
     <span className="text-xs text-muted">no loop has run yet</span>

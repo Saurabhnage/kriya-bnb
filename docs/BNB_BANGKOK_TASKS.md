@@ -4,17 +4,17 @@ Deadline: **27 Nov 2026, 09:00 Bangkok (02:00 UTC)**. Submit by 08:00.
 Repo: https://github.com/Saurabhnage/kriya-bnb, branch `main`. Everything below runs on the developer's machine.
 
 Rules for the agent doing this:
-- Never print, commit or paste private keys or API keys. Read them only from `web/.env.local` and `contracts/.env` (both gitignored).
+- Never print, commit or paste private keys or API keys. Read them only from `web/.env.local`, `contracts/.env` and `cre/.env` (all gitignored).
 - Ask before any step that spends real money. Testnet gas is fine.
 - Cournot gives only **3 free probability calls per IP, ever**. Never call `assess` in loops or retries. Prefer the prepaid key.
 - After each step, show the result (addresses, tx hashes, errors) before moving on.
 
 ## 0. Preflight
 1. `git clone https://github.com/Saurabhnage/kriya-bnb && cd kriya-bnb` (or `git checkout main && git pull` in an existing clone)
-2. Check tools: `node -v` (≥ 20), `forge --version`.
-3. `cd contracts && forge test`: expect 29 passing.
-4. `cd web && npm ci && npm test`: expect 44 passing. `npx tsc --noEmit` and `npx eslint src` should be clean.
-5. Optional, no keys needed: `./scripts/e2e-market-local.sh` runs the market risk engine end to end on Anvil (CMC/Cournot fixtures, Atlas mock feeds, onchain peg guard): expect 10 passing.
+2. Check tools: `node -v` (≥ 20), `forge --version`, optional `cre version` and `bun -v` for the CRE run.
+3. `cd contracts && forge test`: expect 34 passing.
+4. `cd web && npm ci && npm test`: expect 47 passing. `npx tsc --noEmit` and `npx eslint src` should be clean.
+5. Optional, no keys needed: `./scripts/e2e-market-local.sh` runs the market risk engine end to end on Anvil (CMC/Cournot fixtures, Atlas mock feeds, onchain peg guard, CRE report): expect 11 passing.
 
 ## 1. Keys and env (ask the developer for anything missing)
 Create `web/.env.local` from `web/.env.example`:
@@ -31,7 +31,7 @@ Create `web/.env.local` from `web/.env.example`:
 ```bash
 PRIVATE_KEY=<deployer, from the developer's env> AGENT_ADDRESS=<address of AGENT_PRIVATE_KEY> ATLAS_PEG_FEED=<Atlas USDT/USD feed> ./scripts/deploy-bsc.sh
 ```
-- This checks the Atlas feed, writes `contracts/deployments/97.json` and syncs the web app.
+- This checks the Atlas feed, writes `contracts/deployments/97.json`, syncs the web app and writes `cre/kriya-workflow/config.bnb.json` (set `AGENT_URL` to the app's public URL if CRE should call it).
 - If no Atlas feed works on BSC testnet, deploy without `ATLAS_PEG_FEED` (the guard stays off) and say so in the write-up; the offchain engine can still use CMC.
 - If BSC rejects the txs, keep `--legacy`. If the RPC rate-limits, set `BSC_TESTNET_RPC_URL` to another public BSC testnet RPC.
 - If `ETHERSCAN_API_KEY` is available, verify the contracts on testnet.bscscan.com.
@@ -49,7 +49,10 @@ In the browser (MetaMask on BSC testnet), or scripted with viem from a funded te
 3. **Guardrail test** → `ExposureExceeded` revert. Save the tx hash.
 4. Cournot: in *Market intelligence → Event risk*, enter a real claim (e.g. "BNB below $500 before December 31, 2026", direction = stress), click **Find markets**, then **Assess** exactly once. Save the proof id and request id from `GET /api/market` → `evidence.cournotProofs`.
 5. If live market risk alone doesn't breach the mandate, use **Spike B → 48** (scenario override), then **Run loop** → VERIFY tx + rebalance tx. Save both.
-6. Optional: deploy the web app to Vercel with `NEXT_PUBLIC_CHAIN_ID=97` and the same env (plus Upstash Redis for shared state). Then put the demo mandate address in `DEMO_VIEW_ADDRESS` for chain 97 in `web/src/lib/config.ts`.
+6. Chainlink CRE on BNB: put a funded BSC testnet key in `cre/.env` (`CRE_ETH_PRIVATE_KEY`, see `cre/.env.example`), then
+   `cd cre && cre workflow simulate kriya-workflow --target bnb-settings --non-interactive --trigger-index 0 --broadcast`
+   with the web app reachable at the `agentUrl` in `config.bnb.json`. Save the tx hashes for the README's CRE row and copy the CLI output to `docs/cre/bnb-simulation.log`.
+7. Optional: deploy the web app to Vercel with `NEXT_PUBLIC_CHAIN_ID=97` and the same env (plus Upstash Redis for shared state). Then put the demo mandate address in `DEMO_VIEW_ADDRESS` for chain 97 in `web/src/lib/config.ts`.
 
 ## 5. Fill in every TODO
 - `README.md` → "Live on BNB Chain testnet" section: contract table (from `97.json`, as testnet.bscscan.com links), Atlas feed addresses, the step/tx table, Cournot proof id and request id, live app URL.

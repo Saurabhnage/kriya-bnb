@@ -5,7 +5,7 @@ import type { Address } from "viem";
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
-// The KRIYA keeper loop (Observe → Verify → Detect → Decide → Constrain → Execute), run with protocol keys.
+// Local fallback for the Chainlink CRE workflow: same loop, executed with protocol keys.
 // Streams one JSON LoopStep per line (NDJSON) as each step completes, then {"done":true}.
 export async function POST(request: Request) {
   const blocked = await limited("keeper-run", 6, 60);

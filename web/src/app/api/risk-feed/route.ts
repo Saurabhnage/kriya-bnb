@@ -5,8 +5,8 @@ import { clearOverrides, marketEnabled, refreshMarketRisk, setOverride } from "@
 
 export const dynamic = "force-dynamic";
 
-// The off-chain risk view the keeper verifies onchain: written by the Market Risk Engine,
-// with optional manual scenario overrides. GET returns a deterministic, sorted list.
+// External risk data source consumed by the Chainlink CRE workflow (and the local keeper).
+// GET returns a deterministic, sorted list so every CRE node reaches identical consensus.
 export async function GET() {
   const feed = await getRiskFeed();
   const strategies = Object.entries(feed.risks)

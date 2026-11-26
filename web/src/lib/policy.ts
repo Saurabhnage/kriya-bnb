@@ -1,8 +1,9 @@
 // KRIYA mandate policy: a dependency-free TypeScript mirror of KriyaExecutor's onchain rules.
-// Mirrors KriyaExecutor.validateAllocation, so the agent and the contract apply the same constraints.
+// Shared by the web agent and the Chainlink CRE workflow (imported via relative path),
+// so every layer — agent, CRE, contract — applies the same constraints.
 //
 // The contract is the final authority. This mirror lets the agent reject a bad LLM proposal
-// before spending gas, and explains a rejection in plain words.
+// before spending gas, and lets CRE verify a proposal before writing a report.
 
 export const BPS = 10_000;
 export const RESERVE_RISK = 2;

@@ -34,6 +34,16 @@ jobs:
       - run: npm test
       - run: npm run build
 
+  cre:
+    name: CRE workflow (types)
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: cre/kriya-workflow } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --ignore-scripts
+      - run: bunx tsc --noEmit
+
   e2e:
     name: End-to-end (Anvil + API + wallet)
     runs-on: ubuntu-latest

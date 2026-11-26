@@ -123,10 +123,10 @@ function Skeleton() {
 function Landing({ onConnect }: { onConnect: () => void }) {
   const layers = [
     ["Intent", "You set the objective and hard limits"],
-    ["Intelligence", "Claude proposes allocations"],
     ["Market truth", "CoinMarketCap, Atlas and Cournot score every strategy"],
-    ["Enforcement", "Contracts revert anything outside the mandate"],
-    ["Execution", "Capital moves onchain, auditable"],
+    ["Intelligence", "Claude proposes, with Living Brain memory"],
+    ["Verification", "Chainlink CRE verifies it onchain"],
+    ["Enforcement", "BNB Chain contracts revert anything outside the mandate"],
   ];
   return (
     <section className="mx-auto mt-6 max-w-5xl">
@@ -138,7 +138,7 @@ function Landing({ onConnect }: { onConnect: () => void }) {
         </h1>
         <p className="mt-4 max-w-2xl text-muted">
           Tell KRIYA the outcome you want and the limits it must respect. Live CoinMarketCap, Atlas and Cournot data set the risk,
-          Claude decides with Living Brain memory, and BNB Chain contracts revert anything outside your mandate.
+          Claude decides with Living Brain memory, Chainlink CRE verifies, and BNB Chain contracts revert anything outside your mandate.
         </p>
         <div className="mt-8 flex flex-wrap gap-3">
           {DEMO_VIEW_ADDRESS && (

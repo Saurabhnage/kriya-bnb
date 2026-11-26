@@ -1,0 +1,7 @@
+bnb-settings:
+  user-workflow:
+    workflow-name: "kriya-workflow-bnb"
+  workflow-artifacts:
+    workflow-path: "./main.ts"
+    config-path: "./config.bnb.json"
+    secrets-path: ""

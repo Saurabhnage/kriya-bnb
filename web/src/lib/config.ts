@@ -27,6 +27,8 @@ type Deployment = {
   mandate: Address;
   vault: Address;
   executor: Address;
+  /** Chainlink CRE forwarder allowed to deliver reports to KriyaExecutor. */
+  forwarder: Address;
   /** Atlas feed used by the executor's onchain peg guard (zero address = disabled). */
   pegFeed: Address;
   agent: Address;

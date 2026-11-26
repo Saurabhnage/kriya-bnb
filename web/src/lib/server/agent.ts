@@ -14,7 +14,7 @@ import {
 
 // KRIYA decision engine.
 // The LLM researches and proposes. It never touches keys or contracts: its output is parsed into
-// a typed allocation, checked by the policy mirror, and only then handed to the executor —
+// a typed allocation, checked by the policy mirror, and only then handed to CRE / the executor —
 // which re-check it against the onchain mandate.
 
 export const MODEL = process.env.KRIYA_MODEL ?? "claude-sonnet-5-5";
@@ -96,7 +96,7 @@ const JSON_SCHEMA = {
 } as const;
 
 const SYSTEM = `You are KRIYA, an autonomous capital allocator operating under a user's programmable financial mandate.
-You propose allocations; you never execute them. Every proposal is re-validated by a deterministic policy engine and finally by the KriyaExecutor smart contract on BNB Chain, which reverts anything outside the mandate.
+You propose allocations; you never execute them. Every proposal is re-validated by a deterministic policy engine, by a Chainlink CRE workflow, and finally by the KriyaExecutor smart contract, which reverts anything outside the mandate.
 
 Hard rules your proposal must satisfy (otherwise it is discarded):
 - Only use allowed strategies, each at most maxExposureBps.
@@ -194,7 +194,7 @@ export function triggerFor(input: DecisionInput): string {
 
 /**
  * Produce a validated allocation proposal. Identical inputs within the cache window return the
- * identical proposal, so retries observe the same decision.
+ * identical proposal, so every CRE node (and retries) observe the same decision.
  */
 export async function propose(input: DecisionInput): Promise<Proposal> {
   const key = JSON.stringify(input, (_, v) => (typeof v === "bigint" ? v.toString() : v));

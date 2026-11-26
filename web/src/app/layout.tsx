@@ -8,7 +8,7 @@ const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"]
 
 export const metadata: Metadata = {
   title: "KRIYA · Autonomous Capital Protocol",
-  description: "Program financial objectives. Live market risk from CoinMarketCap, Atlas and Cournot; Claude decides; BNB Chain contracts enforce.",
+  description: "Program financial objectives. Live market risk from CoinMarketCap, Atlas and Cournot; Claude decides; Chainlink CRE verifies; BNB Chain contracts enforce.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
