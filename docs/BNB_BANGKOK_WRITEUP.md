@@ -1,7 +1,7 @@
 # KRIYA: one-page write-up (CoinMarketCap × Atlas Challenge, BNB Bangkok 2026)
 
 **Team:** Saurabh Nage · X @saurabhnage624 · `TODO email / Telegram`
-**Repo:** https://github.com/Saurabhnage/kriya (branch `bnb-bangkok`) · **Demo video:** `TODO`
+**Repo:** https://github.com/Saurabhnage/kriya-bnb · **Demo video:** `TODO`
 
 ## Problem and audience
 

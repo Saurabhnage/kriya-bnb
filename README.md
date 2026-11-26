@@ -338,7 +338,7 @@ The dashboard is a one-screen **mission control**: mandate and allocation on the
 
 KRIYA was built from scratch during the Monad Metropolis Hackathon window: the first commit is 2026-10-06 and the full history is in this repository. The same codebase was also entered in TOKEN2049 Origins (Ethereum Sepolia). The Monad deployment, the Monad build of the app and the Monad documentation were added for Metropolis.
 
-**BNB Bangkok (25–27 November 2026):** KRIYA existed before this hackathon. Built during the event, on the `bnb-bangkok` branch: BNB Chain testnet support (app, deploy script, CRE target), the Market Risk Engine (CoinMarketCap + Atlas + Cournot), Living Brain memory for the agent, the Market intelligence dashboard panel, and the tests for all of it.
+**BNB Bangkok (25–27 November 2026):** KRIYA existed before this hackathon. Built during the event (commit `12eb51c` and every commit after it in `git log`): BNB Chain testnet support (app, deploy script, CRE target), the Market Risk Engine (CoinMarketCap + Atlas + Cournot), Living Brain memory for the agent, the Market intelligence dashboard panel, and the tests for all of it.
 
 ## AI disclosure
 

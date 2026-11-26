@@ -1,7 +1,7 @@
 # BNB Bangkok: finish-line tasks for Claude Code
 
 Deadline: **27 Nov 2026, 09:00 Bangkok (02:00 UTC)**. Submit by 08:00.
-Branch: `bnb-bangkok`. Everything below runs on the developer's machine.
+Repo: https://github.com/Saurabhnage/kriya-bnb, branch `main`. Everything below runs on the developer's machine.
 
 Rules for the agent doing this:
 - Never print, commit or paste private keys or API keys. Read them only from `web/.env.local`, `contracts/.env` and `cre/.env` (all gitignored).
@@ -10,7 +10,7 @@ Rules for the agent doing this:
 - After each step, show the result (addresses, tx hashes, errors) before moving on.
 
 ## 0. Preflight
-1. `git checkout bnb-bangkok && git pull`
+1. `git clone https://github.com/Saurabhnage/kriya-bnb && cd kriya-bnb` (or `git checkout main && git pull` in an existing clone)
 2. Check tools: `node -v` (≥ 20), `forge --version`, optional `cre version` and `bun -v` for the CRE run.
 3. `cd contracts && forge test`: expect 23 passing.
 4. `cd web && npm ci && npm test`: expect 47 passing. `npx tsc --noEmit` and `npx eslint src` should be clean.
@@ -61,7 +61,7 @@ In the browser (MetaMask on BSC testnet), or scripted with viem from a funded te
 ## 6. Final checks and push
 - `cd contracts && forge test`, `cd web && npm test && npx tsc --noEmit && npx eslint src`
 - `git status`: confirm that no `.env*` files (other than `.env.example`), keys, `.data/` or `broadcast/*/31337` are staged.
-- Commit ("BNB Bangkok: testnet deployment, live evidence, docs") and push `bnb-bangkok`. Ask the developer whether to merge into `main`, since judges usually open the default branch.
+- Commit ("BNB Bangkok: testnet deployment, live evidence, docs") and push `main` (the branch judges open).
 
 ## 7. Submission (the developer does this, Claude Code can draft it)
 - HackQuest project: description, public repo link, demo video, and tracks **Developer Track, CoinMarketCap × Atlas, Cournot, ChatAndBuild Living Brain**.
