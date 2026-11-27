@@ -24,7 +24,9 @@ let sharedClient: LivingBrainClient | null = null;
 // own subject when the header is omitted, so it is sent only when LIVING_BRAIN_SUBJECT_ID is set.
 // Market memory and each mandate owner's memory are kept apart as separate brains instead.
 function client() {
-  sharedClient ??= new LivingBrainClient({ apiKey: KEY()!, subjectId: process.env.LIVING_BRAIN_SUBJECT_ID?.trim() || undefined });
+  // The SDK types subjectId as required, but drops the header at runtime when it is undefined.
+  const subjectId = (process.env.LIVING_BRAIN_SUBJECT_ID?.trim() || undefined) as string;
+  sharedClient ??= new LivingBrainClient({ apiKey: KEY()!, subjectId });
   return sharedClient;
 }
 
