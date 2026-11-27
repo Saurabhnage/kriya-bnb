@@ -23,7 +23,8 @@ async function logCall(c: CmcCall) {
 
 export const readCmcCalls = async () => (await getJson<CmcCall[]>("cmc-calls")) ?? [];
 
-type CmcBody = { status?: { error_code?: number; error_message?: string; credit_count?: number }; data?: unknown };
+// v3 endpoints (e.g. fear-and-greed) return error_code and credit_count as strings ("0"), v2 as numbers.
+type CmcBody = { status?: { error_code?: number | string; error_message?: string; credit_count?: number | string }; data?: unknown };
 
 async function get(path: string, params: Record<string, string> = {}): Promise<CmcBody> {
   const key = KEY();
@@ -35,8 +36,10 @@ async function get(path: string, params: Record<string, string> = {}): Promise<C
 
   const res = await fetch(url, { headers: { "X-CMC_PRO_API_KEY": key, accept: "application/json" }, cache: "no-store" });
   const body = (await res.json().catch(() => ({}))) as CmcBody;
-  await logCall({ ts: Date.now(), endpoint: url.pathname, http: res.status, errorCode: body.status?.error_code, credits: body.status?.credit_count });
-  if (!res.ok || body.status?.error_code) throw new Error(`CoinMarketCap ${url.pathname}: ${body.status?.error_message ?? res.status}`);
+  const errorCode = body.status?.error_code != null ? Number(body.status.error_code) : undefined;
+  const credits = body.status?.credit_count != null ? Number(body.status.credit_count) : undefined;
+  await logCall({ ts: Date.now(), endpoint: url.pathname, http: res.status, errorCode, credits });
+  if (!res.ok || errorCode) throw new Error(`CoinMarketCap ${url.pathname}: ${body.status?.error_message ?? res.status}`);
   cache.set(url.toString(), { at: Date.now(), body });
   return body;
 }
@@ -66,7 +69,8 @@ export async function quotes(symbols: string[]): Promise<Record<string, Quote>> 
 export async function fearGreed(): Promise<{ value: number; classification: string } | null> {
   try {
     const body = await get("/v3/fear-and-greed/latest");
-    const d = body.data as { value?: number; value_classification?: string } | undefined;
+    const raw = Array.isArray(body.data) ? body.data[0] : body.data;
+    const d = raw as { value?: number | string; value_classification?: string } | undefined;
     return d?.value != null ? { value: Number(d.value), classification: String(d.value_classification ?? "") } : null;
   } catch {
     return null;

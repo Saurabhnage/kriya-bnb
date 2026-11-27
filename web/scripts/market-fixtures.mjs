@@ -40,7 +40,8 @@ function handle(req, url, body) {
     return [200, { status: status(), data }];
   }
   if (url.pathname === "/v3/fear-and-greed/latest") {
-    return [200, { status: status(), data: { value: m.fearGreed[0], value_classification: m.fearGreed[1], update_time: new Date().toISOString() } }];
+    // The real v3 endpoint returns error_code/credit_count as strings.
+    return [200, { status: { ...status(), error_code: "0", credit_count: "1" }, data: { value: m.fearGreed[0], value_classification: m.fearGreed[1], update_time: new Date().toISOString() } }];
   }
   if (url.pathname === "/intelligence/v1/resolve") {
     return [200, {
