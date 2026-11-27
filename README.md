@@ -19,14 +19,14 @@ Built for **BNB Bangkok 2026**: Developer Track (RWA + onchain AI agents), CoinM
 
 | Contract | Address |
 | --- | --- |
-| KriyaExecutor (CRE receiver) | `TODO after ./scripts/deploy-bsc.sh` |
-| KriyaVault | `TODO` |
-| KriyaMandate | `TODO` |
-| KriyaStrategyRegistry | `TODO` |
-| Test USDC | `TODO` |
-| Strategy A / B / C | `TODO` |
+| KriyaExecutor (CRE receiver) | [`0xADEead25f7aB15483889A669C450e51Ec978ba36`](https://testnet.bscscan.com/address/0xADEead25f7aB15483889A669C450e51Ec978ba36) |
+| KriyaVault | [`0x914768800B7fB80762ecdef092dfc9a889bd8331`](https://testnet.bscscan.com/address/0x914768800B7fB80762ecdef092dfc9a889bd8331) |
+| KriyaMandate | [`0xBd28D5cE0d59d8aE7BB9d1797734FD55c41f06e8`](https://testnet.bscscan.com/address/0xBd28D5cE0d59d8aE7BB9d1797734FD55c41f06e8) |
+| KriyaStrategyRegistry | [`0xCC09b2740980af77382Aa89Dc570edAd86Cd5351`](https://testnet.bscscan.com/address/0xCC09b2740980af77382Aa89Dc570edAd86Cd5351) |
+| Test USDC | [`0xA8dcD36C47a3152aa0049D5D333646E179578738`](https://testnet.bscscan.com/address/0xA8dcD36C47a3152aa0049D5D333646E179578738) |
+| Strategy A / B / C | [`0x67E7969Acc61d73C0ef9dc0239476332dcBAd219`](https://testnet.bscscan.com/address/0x67E7969Acc61d73C0ef9dc0239476332dcBAd219) · [`0x6Bb7E8ec50Ce23a13473165cA4c7b7ed2888284A`](https://testnet.bscscan.com/address/0x6Bb7E8ec50Ce23a13473165cA4c7b7ed2888284A) · [`0xfA4c91A632A23F1cC800B857d2e0EFe3A8D959B9`](https://testnet.bscscan.com/address/0xfA4c91A632A23F1cC800B857d2e0EFe3A8D959B9) |
 | Chainlink CRE MockKeystoneForwarder (`binance_smart_chain-testnet`) | `0xA238e42cb8782808DBb2F37E19859244ec4779B0` |
-| Atlas feeds read by the engine (BNB/USD, USDT/USD, USDC/USD) | `TODO` |
+| Atlas feeds read by the engine (BNB/USD, USDT/USD) | [`0x3957d289ee9c38272377786787ea34f9dd29788d`](https://testnet.bscscan.com/address/0x3957d289ee9c38272377786787ea34f9dd29788d) · [`0x9dfd7992952bb9e8fb4bc6065fdc3518addc4e8b`](https://testnet.bscscan.com/address/0x9dfd7992952bb9e8fb4bc6065fdc3518addc4e8b) (Atlas publishes no USDC/USD feed on testnet) |
 | Atlas feed read **onchain by KriyaExecutor** (peg guard) | `TODO` |
 
 | Step | Tx |
