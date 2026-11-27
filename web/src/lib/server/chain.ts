@@ -23,16 +23,19 @@ export const directClient = createPublicClient({
 });
 
 /**
- * Event-log reads. Optional LOGS_RPC_URL points log queries at an archive/indexing RPC that serves
- * large block ranges in one call; otherwise the public RPC is paged.
+ * Event-log reads. LOGS_RPC_URL points log queries at an archive/indexing RPC that serves large
+ * block ranges in one call. Without it, BSC testnet uses PublicNode: the BNB Chain data-seed RPCs
+ * answer eth_getLogs with "limit exceeded" for any useful range, which left the activity feed,
+ * risk history and decision card empty on hosted deployments.
  */
-const LOGS_RPC_URL = process.env.LOGS_RPC_URL?.trim();
+const DEFAULT_LOGS_RPC: Record<number, string> = { 97: "https://bsc-testnet-rpc.publicnode.com" };
+const LOGS_RPC_URL = process.env.LOGS_RPC_URL?.trim() || DEFAULT_LOGS_RPC[chain.id];
 export const logsClient = LOGS_RPC_URL
   ? createPublicClient({ chain, transport: http(LOGS_RPC_URL, { retryCount: 3, retryDelay: 400 }) })
   : publicClient;
 /** Max block span per eth_getLogs call, and how far back to look when the RPC is range-capped. */
 export const LOG_RANGE = LOGS_RPC_URL
-  ? { chunk: 500_000n, lookback: null }
+  ? { chunk: 50_000n, lookback: null }
   : chain.id === 31337
     ? { chunk: 9_000n, lookback: null }
     : { chunk: 4_999n, lookback: null }; // BSC public RPCs cap eth_getLogs at 5,000 blocks

@@ -61,4 +61,4 @@ export const addressUrl = (a: string) => (EXPLORER ? `${EXPLORER}/address/${a}` 
 
 /** A live mandate judges can open read-only from the landing page, per chain. */
 export const DEMO_VIEW_ADDRESS: string | null =
-  ({ 31337: "0x9965507D1a55bcC2695C58ba16FB37d819B0A4dc" } as Record<number, string>)[CHAIN_ID] ?? null;
+  ({ 31337: "0x9965507D1a55bcC2695C58ba16FB37d819B0A4dc", 97: "0x6b037F4e63aa077B4Ad1857Fe949e23a0B620D1b" } as Record<number, string>)[CHAIN_ID] ?? null;
