@@ -17,14 +17,29 @@ export type Memory = { title: string; summary: string; similarity: number | null
 type Subject = "market" | `user:${string}`;
 
 const brains = new Map<string, { client: LivingBrainClient; brainId: string }>();
+let sharedClient: LivingBrainClient | null = null;
+
+// Living Brain's `x-subject-id` must be a subject UUID the API key may act for (arbitrary strings
+// such as "kriya:market" are rejected with 401 "Invalid x-subject-id header"). A key acts for its
+// own subject when the header is omitted, so it is sent only when LIVING_BRAIN_SUBJECT_ID is set.
+// Market memory and each mandate owner's memory are kept apart as separate brains instead.
+function client() {
+  // The SDK types subjectId as required, but drops the header at runtime when it is undefined.
+  const subjectId = (process.env.LIVING_BRAIN_SUBJECT_ID?.trim() || undefined) as string;
+  sharedClient ??= new LivingBrainClient({ apiKey: KEY()!, subjectId });
+  return sharedClient;
+}
+
+const brainName = (subject: Subject) => (subject === "market" ? BRAIN_NAME : `${BRAIN_NAME} ${subject.toLowerCase()}`);
 
 async function brainFor(subject: Subject) {
   const hit = brains.get(subject);
   if (hit) return hit;
-  const client = new LivingBrainClient({ apiKey: KEY()!, subjectId: `kriya:${subject.toLowerCase()}` });
-  const existing = (await client.brains.list()) ?? [];
-  const brain = existing.find((b) => b.name === BRAIN_NAME) ?? (await client.brains.create({ name: BRAIN_NAME }));
-  const entry = { client, brainId: brain.id };
+  const c = client();
+  const name = brainName(subject);
+  const existing = (await c.brains.list()) ?? [];
+  const brain = existing.find((b) => b.name === name) ?? (await c.brains.create({ name }));
+  const entry = { client: c, brainId: brain.id };
   brains.set(subject, entry);
   return entry;
 }

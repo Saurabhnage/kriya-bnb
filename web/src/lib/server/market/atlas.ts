@@ -1,6 +1,6 @@
 import "server-only";
 import { formatUnits, isAddress, parseAbi, type Address } from "viem";
-import { publicClient } from "../chain";
+import { directClient } from "../chain";
 
 // Atlas Oracle price feeds, read onchain on BNB Chain. Atlas single-feed contracts are
 // Chainlink AggregatorV3-compatible. Configure addresses per pair in .env:
@@ -29,9 +29,9 @@ export async function readAtlas(): Promise<AtlasPrice[]> {
     feeds.map(async ({ symbol, feed }): Promise<AtlasPrice | null> => {
       try {
         const [decimals, description, round] = await Promise.all([
-          publicClient.readContract({ address: feed, abi: FEED_ABI, functionName: "decimals" }),
-          publicClient.readContract({ address: feed, abi: FEED_ABI, functionName: "description" }).catch(() => `${symbol} / USD`),
-          publicClient.readContract({ address: feed, abi: FEED_ABI, functionName: "latestRoundData" }),
+          directClient.readContract({ address: feed, abi: FEED_ABI, functionName: "decimals" }),
+          directClient.readContract({ address: feed, abi: FEED_ABI, functionName: "description" }).catch(() => `${symbol} / USD`),
+          directClient.readContract({ address: feed, abi: FEED_ABI, functionName: "latestRoundData" }),
         ]);
         const [roundId, answer, , updatedAt] = round;
         if (answer <= 0n) return null;
@@ -45,7 +45,8 @@ export async function readAtlas(): Promise<AtlasPrice[]> {
           roundId: roundId.toString(),
           stale: Date.now() / 1000 - updated > MAX_AGE_S,
         };
-      } catch {
+      } catch (err) {
+        console.warn(`[atlas] ${symbol}/USD feed ${feed} unreadable:`, err instanceof Error ? err.message.split("\n")[0] : err);
         return null;
       }
     }),
