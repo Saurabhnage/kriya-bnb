@@ -78,7 +78,9 @@ export function MarketPanel({ state, readOnly, onChanged }: { state: StateRespon
         {/* 1. live risk scores */}
         <div>
           <h3 className="label mb-2">Live risk per strategy (mandate max {max})</h3>
-          {!intel?.scores.length && <p className="text-xs text-muted">No market scores yet.</p>}
+          {!intel?.scores.length && (
+            <p className="text-xs text-muted">{!data ? "Scoring strategies from live market data…" : "No market scores yet. Run the loop to score every strategy."}</p>
+          )}
           <ul className="space-y-3">
             {intel?.scores.map((s) => {
               const override = intel.overrides[s.address.toLowerCase()];
@@ -137,7 +139,9 @@ export function MarketPanel({ state, readOnly, onChanged }: { state: StateRespon
               </tbody>
             </table>
           ) : (
-            <p className="text-xs text-muted">CoinMarketCap not configured.</p>
+            <p className="text-xs text-muted">
+              {!data ? "Loading market data…" : en?.coinmarketcap ? "No CoinMarketCap snapshot yet. Run the loop or refresh market risk." : "CoinMarketCap is off on this deployment."}
+            </p>
           )}
           {intel?.cmc?.fearGreed && (
             <p className="mt-1 text-xs">
@@ -157,7 +161,9 @@ export function MarketPanel({ state, readOnly, onChanged }: { state: StateRespon
               ))}
             </ul>
           ) : (
-            <p className="text-xs text-muted">No Atlas feeds configured (ATLAS_FEED_BNB_USD / USDT_USD / USDC_USD).</p>
+            <p className="text-xs text-muted">
+              {!data ? "Loading…" : en?.atlasFeeds.length ? "No Atlas reading yet. Run the loop or refresh market risk." : "No Atlas feeds configured on this deployment."}
+            </p>
           )}
           <h3 className="label mb-1 mt-3">Onchain peg guard (KriyaExecutor reads Atlas)</h3>
           {data?.pegGuard ? (
@@ -169,7 +175,9 @@ export function MarketPanel({ state, readOnly, onChanged }: { state: StateRespon
               <Ext href={addressUrl(data.pegGuard.feed)}>{short(data.pegGuard.feed)}</Ext>
             </p>
           ) : (
-            <p className="text-xs text-muted">Not configured (deploy with ATLAS_PEG_FEED to enforce the stablecoin peg onchain).</p>
+            <p className="text-xs text-muted">
+              Off on this deployment. When enabled, KriyaExecutor reads an Atlas stablecoin feed onchain and freezes new deployments on a depeg.
+            </p>
           )}
           {data?.evidence.cmcCalls.length ? (
             <details className="mt-3 text-xs text-muted">

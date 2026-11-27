@@ -1,4 +1,4 @@
-import { readIntel, marketEnabled } from "@/lib/server/market/engine";
+import { readIntel, marketEnabled, refreshIfStale } from "@/lib/server/market/engine";
 import { cmcEnabled, readCmcCalls } from "@/lib/server/market/cmc";
 import { atlasFeeds } from "@/lib/server/market/atlas";
 import { latestAssessment, readCournotProofs } from "@/lib/server/market/cournot";
@@ -29,7 +29,8 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   try {
     const [intel, cmcCalls, cournot, proofs, pegGuard] = await Promise.all([
-      readIntel(),
+      // first visit on a fresh deployment: pull live data once instead of showing an empty panel
+      readIntel().then((i) => i ?? (marketEnabled() ? refreshIfStale() : null)),
       readCmcCalls(),
       latestAssessment(),
       readCournotProofs(),
