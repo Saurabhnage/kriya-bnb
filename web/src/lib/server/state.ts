@@ -131,16 +131,60 @@ const CHUNK = LOG_RANGE.chunk;
 // keyed by block hash: block numbers repeat across chain resets and reorgs, hashes do not
 const blockTimes = new Map<string, number>();
 
-async function logsInChunks<T>(fetcher: (from: bigint, to: bigint) => Promise<T[]>, latest: bigint): Promise<T[]> {
-  const out: T[] = [];
+// All KRIYA contract events, scanned once and cached per server instance. Each poll only scans the
+// blocks since the last one, in one eth_getLogs per block range (every event and contract at once),
+// so /api/state stays fast on hosted deployments where the public RPC is range-capped.
+type DecodedLog = Log & { eventName: string; args: Record<string, unknown> };
+const LOG_CONCURRENCY = 4;
+const SCAN_BUDGET_MS = 8_000;
+const logCache: { scannedTo: bigint | null; logs: DecodedLog[]; inflight: Promise<void> | null } = {
+  scannedTo: null,
+  logs: [],
+  inflight: null,
+};
+
+async function scanTo(latest: bigint) {
   const deployed = BigInt(deployment.deployBlock);
-  // Range-capped RPC without an indexer: only scan a recent window so a request stays bounded.
-  const start = LOG_RANGE.lookback !== null && latest - LOG_RANGE.lookback > deployed ? latest - LOG_RANGE.lookback : deployed;
-  for (let from = start; from <= latest; from += CHUNK + 1n) {
-    const to = from + CHUNK > latest ? latest : from + CHUNK;
-    out.push(...(await fetcher(from, to)));
+  let from = logCache.scannedTo === null ? deployed : logCache.scannedTo + 1n;
+  if (LOG_RANGE.lookback !== null && logCache.scannedTo === null && latest - LOG_RANGE.lookback > deployed) from = latest - LOG_RANGE.lookback;
+  const address = [deployment.vault, deployment.mandate, deployment.registry, deployment.executor];
+  const events = Object.values(EVENTS);
+  while (from <= latest) {
+    // a batch of ranges in parallel; results are committed in order so scannedTo never skips a gap
+    const ranges: [bigint, bigint][] = [];
+    for (let f = from; f <= latest && ranges.length < LOG_CONCURRENCY; f += CHUNK + 1n) ranges.push([f, f + CHUNK > latest ? latest : f + CHUNK]);
+    const results = await Promise.all(
+      ranges.map(([fromBlock, toBlock]) =>
+        logsClient.getLogs({ address, events, fromBlock, toBlock } as unknown as Parameters<typeof logsClient.getLogs>[0]),
+      ),
+    );
+    for (const r of results) logCache.logs.push(...(r as unknown as DecodedLog[]));
+    logCache.scannedTo = ranges[ranges.length - 1][1];
+    from = logCache.scannedTo + 1n;
   }
-  return out;
+}
+
+/** Brings the cache up to `latest`, waiting at most SCAN_BUDGET_MS; a longer scan keeps going in the background. */
+async function syncLogs(latest: bigint) {
+  if (logCache.scannedTo !== null && logCache.scannedTo >= latest) return;
+  if (!logCache.inflight) {
+    logCache.inflight = scanTo(latest)
+      .catch((err) => console.error("KRIYA log scan failed", err))
+      .finally(() => {
+        logCache.inflight = null;
+      });
+  }
+  await Promise.race([logCache.inflight, new Promise((r) => setTimeout(r, SCAN_BUDGET_MS))]);
+}
+
+function cachedLogs(address: Address, event: (typeof EVENTS)[keyof typeof EVENTS], args?: Record<string, unknown>) {
+  const user = (args?.user as string | undefined)?.toLowerCase();
+  return logCache.logs.filter(
+    (l) =>
+      l.address.toLowerCase() === address.toLowerCase() &&
+      l.eventName === event.name &&
+      (!user || (l.args.user as string | undefined)?.toLowerCase() === user),
+  );
 }
 
 const fmtUsdc = (v: bigint) => (Number(v) / 1e6).toLocaleString("en-US", { maximumFractionDigits: 2 });
@@ -149,15 +193,10 @@ export type ActivityResult = { items: ActivityItem[]; riskHistory: RiskPoint[]; 
 
 export async function readActivity(user: Address, strategies: StrategyView[], latest: bigint): Promise<ActivityResult> {
   const name = (a: string) => strategies.find((s) => s.address.toLowerCase() === a.toLowerCase())?.name ?? a.slice(0, 8);
-  const get = async (address: Address, event: (typeof EVENTS)[keyof typeof EVENTS], args?: Record<string, unknown>) => {
-    return logsInChunks(
-      (fromBlock, toBlock) =>
-        logsClient.getLogs({ address, event, args, fromBlock, toBlock } as Parameters<typeof logsClient.getLogs>[0]),
-      latest,
-    );
-  };
+  await syncLogs(latest);
+  const get = async (address: Address, event: (typeof EVENTS)[keyof typeof EVENTS], args?: Record<string, unknown>) =>
+    cachedLogs(address, event, args);
 
-  // sequential on purpose: public RPCs rate-limit parallel eth_getLogs bursts
   const dep = await get(deployment.vault, EVENTS.deposited, { user });
   const wd = await get(deployment.vault, EVENTS.withdrawn, { user });
   const ex = await get(deployment.vault, EVENTS.exit, { user });
@@ -229,8 +268,12 @@ export async function readActivity(user: Address, strategies: StrategyView[], la
   }
 
   const blocks = [...new Set(items.map((i) => i.log.blockHash!))].filter((h) => !blockTimes.has(h));
-  for (const b of blocks) {
-    blockTimes.set(b, Number((await publicClient.getBlock({ blockHash: b })).timestamp) * 1000);
+  for (let i = 0; i < blocks.length; i += LOG_CONCURRENCY) {
+    await Promise.all(
+      blocks.slice(i, i + LOG_CONCURRENCY).map(async (b) => {
+        blockTimes.set(b, Number((await publicClient.getBlock({ blockHash: b })).timestamp) * 1000);
+      }),
+    );
   }
 
   const onchain: ActivityItem[] = items.map((i) => ({
