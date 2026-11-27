@@ -19,22 +19,22 @@ Built for **BNB Bangkok 2026**: Developer Track (RWA + onchain AI agents), CoinM
 
 | Contract | Address |
 | --- | --- |
-| KriyaExecutor (CRE receiver) | `TODO after ./scripts/deploy-bsc.sh` |
-| KriyaVault | `TODO` |
-| KriyaMandate | `TODO` |
-| KriyaStrategyRegistry | `TODO` |
-| Test USDC | `TODO` |
-| Strategy A / B / C | `TODO` |
+| KriyaExecutor (CRE receiver) | [`0xADEead25f7aB15483889A669C450e51Ec978ba36`](https://testnet.bscscan.com/address/0xADEead25f7aB15483889A669C450e51Ec978ba36) |
+| KriyaVault | [`0x914768800B7fB80762ecdef092dfc9a889bd8331`](https://testnet.bscscan.com/address/0x914768800B7fB80762ecdef092dfc9a889bd8331) |
+| KriyaMandate | [`0xBd28D5cE0d59d8aE7BB9d1797734FD55c41f06e8`](https://testnet.bscscan.com/address/0xBd28D5cE0d59d8aE7BB9d1797734FD55c41f06e8) |
+| KriyaStrategyRegistry | [`0xCC09b2740980af77382Aa89Dc570edAd86Cd5351`](https://testnet.bscscan.com/address/0xCC09b2740980af77382Aa89Dc570edAd86Cd5351) |
+| Test USDC | [`0xA8dcD36C47a3152aa0049D5D333646E179578738`](https://testnet.bscscan.com/address/0xA8dcD36C47a3152aa0049D5D333646E179578738) |
+| Strategy A / B / C | [`0x67E7969Acc61d73C0ef9dc0239476332dcBAd219`](https://testnet.bscscan.com/address/0x67E7969Acc61d73C0ef9dc0239476332dcBAd219) · [`0x6Bb7E8ec50Ce23a13473165cA4c7b7ed2888284A`](https://testnet.bscscan.com/address/0x6Bb7E8ec50Ce23a13473165cA4c7b7ed2888284A) · [`0xfA4c91A632A23F1cC800B857d2e0EFe3A8D959B9`](https://testnet.bscscan.com/address/0xfA4c91A632A23F1cC800B857d2e0EFe3A8D959B9) |
 | Chainlink CRE MockKeystoneForwarder (`binance_smart_chain-testnet`) | `0xA238e42cb8782808DBb2F37E19859244ec4779B0` |
-| Atlas feeds read by the engine (BNB/USD, USDT/USD, USDC/USD) | `TODO` |
+| Atlas feeds read by the engine (BNB/USD, USDT/USD) | [`0x3957d289ee9c38272377786787ea34f9dd29788d`](https://testnet.bscscan.com/address/0x3957d289ee9c38272377786787ea34f9dd29788d) · [`0x9dfd7992952bb9e8fb4bc6065fdc3518addc4e8b`](https://testnet.bscscan.com/address/0x9dfd7992952bb9e8fb4bc6065fdc3518addc4e8b) (Atlas publishes no USDC/USD feed on testnet) |
 | Atlas feed read **onchain by KriyaExecutor** (peg guard) | `TODO` |
 
 | Step | Tx |
 | --- | --- |
-| Open mandate | `TODO` |
-| Initial allocation (with onchain Atlas `PegChecked` event) | `TODO` |
-| Guardrail revert (`ExposureExceeded`) | `TODO` |
-| Market Risk Engine → VERIFY (risk written onchain) | `TODO` |
+| Open mandate | [`0x021110a8…`](https://testnet.bscscan.com/tx/0x021110a8cde60cff08df33539290da050af902e30c377c07d3035634550e5901) |
+| Initial allocation (live market pushed B to risk 41 > max 40, so Claude chose A 40 · C 35 · reserve 25) | [`0x9690269f…`](https://testnet.bscscan.com/tx/0x9690269febdb83a72a0ec3d87b73a4bde07640557bc2eb5890c077fa309bcbca) |
+| Guardrail revert (`ExposureExceeded`, B 60% > 40%) | [`0x01717230…`](https://testnet.bscscan.com/tx/0x0171723039f8666d36308c4a22f17988b7880a515cad0e4367b52eb3c5084c76) |
+| Market Risk Engine → VERIFY (risk written onchain: A 27, B 41, C 17) | [`0x0f9ebcd2…`](https://testnet.bscscan.com/tx/0x0f9ebcd26068675948c9af9dca8d53e6ca4832b7f4f197e4e2104c7b668046d9) |
 | Rebalance driven by live market risk | `TODO` |
 | Chainlink CRE workflow run on BNB Chain (risk report + allocation report) | `TODO` |
 
