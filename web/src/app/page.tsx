@@ -3,7 +3,7 @@
 import { useState, useSyncExternalStore } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { isAddress, type Address } from "viem";
-import { useAccount, useChainId, useConnect, useDisconnect, useSwitchChain } from "wagmi";
+import { useAccount, useConnect, useDisconnect, useSwitchChain } from "wagmi";
 import { chain, DEMO_VIEW_ADDRESS } from "@/lib/config";
 import { api, short, type StateResponse } from "@/lib/client";
 import { MandateBuilder } from "@/components/MandateBuilder";
@@ -24,7 +24,6 @@ export default function Home() {
   const viewAs = useSyncExternalStore(noSubscribe, readViewParam, () => null);
   const address = account.address ?? viewAs ?? undefined;
   const isConnected = account.isConnected || !!viewAs;
-  const chainId = useChainId();
   const { connect, connectors, isPending } = useConnect();
   const { disconnect } = useDisconnect();
   const { switchChain } = useSwitchChain();
@@ -37,7 +36,7 @@ export default function Home() {
     refetchInterval: running ? 2000 : 4000,
   });
 
-  const wrongChain = account.isConnected && chainId !== chain.id;
+  const wrongChain = account.isConnected && account.chainId !== undefined && account.chainId !== chain.id;
   const hasMandate = !!state.data?.snapshot.mandate.exists;
 
   const connectWallet = () => {
