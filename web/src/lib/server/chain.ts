@@ -13,6 +13,16 @@ export const publicClient = createPublicClient({
 });
 
 /**
+ * Plain eth_call reads with no multicall batching, so msg.sender is not the Multicall3 contract.
+ * Needed for oracles that only answer EOAs or allowlisted callers (some Atlas feeds revert with
+ * `OnlyAuthorizedCallerAllowed` when read through Multicall3).
+ */
+export const directClient = createPublicClient({
+  chain,
+  transport: http(RPC_URL, { retryCount: 4, retryDelay: 400 }),
+});
+
+/**
  * Event-log reads. Optional LOGS_RPC_URL points log queries at an archive/indexing RPC that serves
  * large block ranges in one call; otherwise the public RPC is paged.
  */
