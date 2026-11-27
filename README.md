@@ -31,10 +31,10 @@ Built for **BNB Bangkok 2026**: Developer Track (RWA + onchain AI agents), CoinM
 
 | Step | Tx |
 | --- | --- |
-| Open mandate | `TODO` |
-| Initial allocation (with onchain Atlas `PegChecked` event) | `TODO` |
-| Guardrail revert (`ExposureExceeded`) | `TODO` |
-| Market Risk Engine → VERIFY (risk written onchain) | `TODO` |
+| Open mandate | [`0x021110a8…`](https://testnet.bscscan.com/tx/0x021110a8cde60cff08df33539290da050af902e30c377c07d3035634550e5901) |
+| Initial allocation (live market pushed B to risk 41 > max 40, so Claude chose A 40 · C 35 · reserve 25) | [`0x9690269f…`](https://testnet.bscscan.com/tx/0x9690269febdb83a72a0ec3d87b73a4bde07640557bc2eb5890c077fa309bcbca) |
+| Guardrail revert (`ExposureExceeded`, B 60% > 40%) | [`0x01717230…`](https://testnet.bscscan.com/tx/0x0171723039f8666d36308c4a22f17988b7880a515cad0e4367b52eb3c5084c76) |
+| Market Risk Engine → VERIFY (risk written onchain: A 27, B 41, C 17) | [`0x0f9ebcd2…`](https://testnet.bscscan.com/tx/0x0f9ebcd26068675948c9af9dca8d53e6ca4832b7f4f197e4e2104c7b668046d9) |
 | Rebalance driven by live market risk | `TODO` |
 | Chainlink CRE workflow run on BNB Chain (risk report + allocation report) | `TODO` |
 
