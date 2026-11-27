@@ -5,6 +5,7 @@ import type { Address } from "viem";
 import { readNdjson } from "@/lib/stream";
 import type { Decision, LoopStep, ProposalResponse, StateResponse } from "@/lib/client";
 import { api } from "@/lib/client";
+import { txUrl } from "@/lib/config";
 import { useToast } from "./Toasts";
 import { MandateCard } from "./dashboard/MandateCard";
 import { AllocationPanel } from "./dashboard/AllocationPanel";
@@ -57,7 +58,10 @@ export function Dashboard({ state, user, readOnly, refresh, onRunningChange }: P
         if (line.done) return;
         setLive((prev) => [...(prev ?? []), line]);
         if (line.txHash) refresh();
-        if (line.step === "EXECUTE" && line.status === "ok") toast.success("Allocation executed onchain");
+        if (line.step === "EXECUTE" && line.status === "ok") {
+          const url = line.txHash ? txUrl(line.txHash) : null;
+          toast.success("Allocation executed onchain", url ? { label: "View on BscScan ↗", href: url } : undefined);
+        }
         if (line.status === "error") toast.error(new Error(line.detail));
       });
     } catch (err) {
@@ -83,6 +87,12 @@ export function Dashboard({ state, user, readOnly, refresh, onRunningChange }: P
 
   return (
     <>
+      {readOnly && (
+        <p className="mb-3 rounded-xl border border-accent-2/30 bg-accent-2/5 px-4 py-2 text-xs text-muted">
+          <span className="text-ink">Viewing a live mandate read-only.</span> The demo buttons at the bottom run the KRIYA keeper on the server, so you can
+          watch the full loop without a wallet. Connect a wallet to program your own mandate.
+        </p>
+      )}
       <div className="grid grid-cols-1 gap-3 min-[1100px]:h-[calc(100vh-148px)] min-[1100px]:grid-cols-12 min-[1100px]:pb-0">
         {/* centre first in the DOM so the loop leads on small screens */}
         <div className="flex min-h-0 min-w-0 flex-col gap-3 min-[1100px]:order-2 min-[1100px]:col-span-6">

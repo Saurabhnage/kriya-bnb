@@ -88,7 +88,8 @@ export default function Home() {
         )}
         {isConnected && !wrongChain && state.error && (
           <div className="card mx-auto mt-10 max-w-lg p-6 text-center">
-            <p className="text-danger">Couldn&apos;t read the chain: {(state.error as Error).message}</p>
+            <p className="text-danger">Couldn&apos;t read {chain.name} right now.</p>
+            <p className="mt-2 text-xs text-muted">The public RPC may be busy. Retrying usually works. ({(state.error as Error).message})</p>
             <button className="btn mt-4" onClick={() => state.refetch()}>
               Retry
             </button>
@@ -111,11 +112,17 @@ export default function Home() {
 
 function Skeleton() {
   return (
+    <>
+      <p className="mb-3 flex items-center gap-2 text-sm text-muted" role="status">
+        <span className="inline-block h-2 w-2 animate-ping rounded-full bg-accent-2" />
+        Reading the mandate, positions and history from {chain.name}… this takes a few seconds on the first load.
+      </p>
     <div className="grid animate-pulse gap-3 min-[1100px]:grid-cols-12" aria-label="Reading chain state">
       <div className="card h-64 min-[1100px]:col-span-3" />
       <div className="card h-64 min-[1100px]:col-span-6" />
       <div className="card h-64 min-[1100px]:col-span-3" />
     </div>
+    </>
   );
 }
 

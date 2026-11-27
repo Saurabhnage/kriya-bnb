@@ -41,8 +41,13 @@ export function AllocationPanel({ state }: { state: StateResponse }) {
                   </span>
                   <span className="font-mono">{r.share.toFixed(0)}%</span>
                   <span className={`whitespace-nowrap text-right font-mono ${over ? "text-danger" : "text-muted"}`} title={over ? `Risk ${r.risk} exceeds the mandate max ${max}` : `Risk ${r.risk}`}>
-                    r{r.risk}
-                    {r.feedRisk !== r.risk && <span className="text-warn">→{r.feedRisk}?</span>}
+                    risk {r.risk}
+                    {r.feedRisk !== r.risk && (
+                      <span className="text-warn" title={`The market feed says ${r.feedRisk}; the next loop verifies it onchain`}>
+                        {" "}
+                        → {r.feedRisk}
+                      </span>
+                    )}
                   </span>
                 </li>
               );
@@ -59,9 +64,18 @@ export function AllocationPanel({ state }: { state: StateResponse }) {
           <Gauge value={s.health.portfolioRisk} max={max} ghost={ghost} label="Portfolio risk" />
           <p className="-mt-1 text-center text-xs text-muted">
             Portfolio risk <span className="font-mono text-ink">{s.health.portfolioRisk}</span> / {max}
-            {ghost !== null && <span className="text-warn"> · unverified feed {ghost}</span>}
+            {ghost !== null && <span className="text-warn"> · {ghost} once the feed is verified</span>}
           </p>
         </div>
+        <details className="mt-2 text-xs text-muted">
+          <summary className="cursor-pointer text-accent-2">What do the risk scores mean?</summary>
+          <ul className="mt-1 list-disc space-y-1 pl-4">
+            <li>Each strategy has a risk score from 0 (safest) to 100. It starts from a base and rises with live stress: CoinMarketCap prices and Fear &amp; Greed, Atlas stablecoin pegs, and Cournot event odds.</li>
+            <li>Portfolio risk is the capital-weighted average of what you hold. The reserve counts as 0.</li>
+            <li>Your mandate caps both the portfolio and every single strategy at max risk {max}. The contract reverts any allocation above it.</li>
+            <li>An amber <span className="text-warn">→ n</span> is a new score from the market feed that is not onchain yet. The next loop verifies it and rebalances if a limit is broken.</li>
+          </ul>
+        </details>
       </div>
     </Panel>
   );

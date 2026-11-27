@@ -7,6 +7,7 @@ import { ACTS, type Act } from "@/lib/act";
 import { KriyaMandateAbi, KriyaVaultAbi } from "@/lib/generated/abis";
 import { api, usd, type StateResponse } from "@/lib/client";
 import { useTx } from "../useTx";
+import { txUrl } from "@/lib/config";
 import { useToast } from "../Toasts";
 
 const KEY = "kriya.stagebar.collapsed";
@@ -134,7 +135,11 @@ export function StageBar({ state, readOnly, running, previewing, onRun, onPrevie
               {button("guard", "Guardrail test", () =>
                 run("guard", async () => {
                   const r = await api<{ hash: string; status: string; reason: string }>("/api/agent/guardrail", { user: s.user });
-                  toast.success(`Unsafe 60% proposal ${r.status === "reverted" ? "reverted onchain" : r.status}: ${r.reason}`);
+                  const url = r.hash ? txUrl(r.hash) : null;
+                  toast.success(
+                    `Guardrail held: an unsafe 60% allocation was ${r.status === "reverted" ? "rejected by the contract" : r.status} (${r.reason}).`,
+                    url ? { label: "See the revert on BscScan ↗", href: url } : undefined,
+                  );
                 }),
               )}
               {button("reset", "Reset feed", () =>
@@ -203,7 +208,7 @@ export function StageBar({ state, readOnly, running, previewing, onRun, onPrevie
             </div>
           </>
         )}
-        {txBusy && <span className="text-xs text-muted">{txBusy}… confirm in your wallet</span>}
+        {txBusy && <span className="text-xs text-accent-2">{txBusy}…</span>}
       </div>
     </div>
   );
